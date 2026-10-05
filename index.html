@@ -1,0 +1,1669 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Narula Institute of Technology | AI Face Attendance System</title>
+  
+  <!-- Inter Font -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              500: '#4f46e5',
+              600: '#4338ca',
+              700: '#3730a3',
+              800: '#312e81',
+              900: '#1e1b4b',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Font Awesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- EmailJS SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+  <!-- Face API.js -->
+  <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
+
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #0b0f19;
+      color: #f3f4f6;
+    }
+    select {
+      background-color: #111827 !important;
+      color: #ffffff !important;
+    }
+    select option {
+      background-color: #111827 !important;
+      color: #ffffff !important;
+      padding: 8px;
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: rgba(15, 23, 42, 0.6);
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: rgba(99, 102, 241, 0.4);
+      border-radius: 9999px;
+    }
+    .glass-panel {
+      background: rgba(17, 24, 39, 0.95);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .pulse-scan {
+      position: absolute;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, transparent, #10b981, #38bdf8, transparent);
+      box-shadow: 0 0 15px #10b981;
+      animation: scan 2.2s ease-in-out infinite;
+    }
+    @keyframes scan {
+      0% { top: 4%; opacity: 0.2; }
+      50% { top: 92%; opacity: 1; }
+      100% { top: 4%; opacity: 0.2; }
+    }
+    .video-canvas-container {
+      position: relative;
+      display: inline-block;
+      overflow: hidden;
+      border-radius: 1rem;
+    }
+    .video-canvas-container canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      pointer-events: none;
+    }
+    @keyframes slideUp {
+      from { transform: translateY(15px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+    .name-popup-anim { animation: slideUp 0.25s ease-out forwards; }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col antialiased selection:bg-brand-500 selection:text-white">
+
+  <div id="toastContainer" class="fixed top-4 right-4 z-50 flex flex-col gap-2 max-w-xs sm:max-w-sm w-full pointer-events-none"></div>
+
+  <!-- Global Modal Container -->
+  <div id="globalModalBackdrop" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden items-center justify-center p-3 sm:p-4">
+    <div id="globalModalCard" class="glass-panel w-full max-w-lg rounded-2xl p-5 sm:p-6 border border-slate-700 shadow-2xl relative max-h-[90vh] overflow-y-auto custom-scrollbar">
+      <button onclick="closeModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white text-lg">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+      <div id="modalContent"></div>
+    </div>
+  </div>
+
+  <!-- Header -->
+  <header class="glass-panel sticky top-0 z-40 border-b border-slate-800">
+    <div class="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-2.5 sm:py-0 sm:h-16 flex items-center justify-between gap-2">
+      <div class="flex items-center gap-2.5 min-w-0">
+        <div class="h-9 w-9 sm:h-10 sm:w-10 flex-shrink-0 rounded-xl bg-gradient-to-tr from-brand-600 to-indigo-400 flex items-center justify-center text-white shadow-lg shadow-brand-500/20">
+          <i class="fa-solid fa-graduation-cap text-base sm:text-lg"></i>
+        </div>
+        <div class="min-w-0">
+          <div class="flex flex-wrap items-center gap-1.5">
+            <span class="text-sm sm:text-base font-bold tracking-tight text-white truncate">Narula Institute of Technology</span>
+            <span class="text-[10px] px-1.5 py-0.5 rounded bg-brand-500/20 text-brand-300 font-semibold border border-brand-500/30">AI Portal</span>
+          </div>
+          <p class="text-[11px] text-slate-400 truncate hidden xs:block">Biometric Facial Attendance Hub</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2 flex-shrink-0">
+        <div id="navUserBadge" class="hidden items-center gap-2 bg-slate-800/80 px-2.5 py-1 rounded-xl border border-slate-700">
+          <div class="h-7 w-7 rounded-full bg-brand-600 flex items-center justify-center text-white font-semibold text-xs" id="navUserAvatar">U</div>
+          <div class="text-left hidden sm:block">
+            <div id="navUserName" class="text-xs font-semibold text-white max-w-[100px] truncate">User</div>
+            <div id="navUserRole" class="text-[9px] uppercase font-bold text-brand-400">Role</div>
+          </div>
+          <button id="logoutBtn" title="Sign Out" class="text-slate-400 hover:text-red-400 p-1">
+            <i class="fa-solid fa-arrow-right-from-bracket text-xs"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="flex-1 flex flex-col max-w-7xl w-full mx-auto p-3 sm:p-6 lg:p-8">
+    
+    <!-- LOGIN PORTAL -->
+    <section id="loginSection" class="flex-1 flex items-center justify-center py-6 sm:py-10">
+      <div class="w-full max-w-md glass-panel p-6 sm:p-8 rounded-3xl border border-slate-800 shadow-2xl relative">
+        <div class="text-center mb-6">
+          <div class="inline-flex h-12 w-12 rounded-2xl bg-brand-600/20 border border-brand-500/30 items-center justify-center text-brand-400 text-xl mb-2">
+            <i class="fa-solid fa-fingerprint"></i>
+          </div>
+          <h2 class="text-xl sm:text-2xl font-bold text-white">System Portal Access</h2>
+          <p class="text-xs text-slate-400 mt-1">Sign in with authorized institutional credentials</p>
+        </div>
+
+        <form id="loginForm" class="space-y-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">Institutional Email</label>
+            <div class="relative">
+              <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-500 text-xs">
+                <i class="fa-solid fa-envelope"></i>
+              </span>
+              <input type="email" id="loginEmail" required placeholder="admin@nit.ac.in" 
+                class="w-full pl-9 pr-3 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs sm:text-sm text-white focus:outline-none focus:border-brand-500" />
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">Password</label>
+            <div class="relative">
+              <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-500 text-xs">
+                <i class="fa-solid fa-lock"></i>
+              </span>
+              <input type="password" id="loginPassword" required placeholder="••••••••" 
+                class="w-full pl-9 pr-9 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs sm:text-sm text-white focus:outline-none focus:border-brand-500" />
+              <button type="button" id="togglePasswordBtn" class="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 text-xs">
+                <i class="fa-solid fa-eye" id="togglePasswordIcon"></i>
+              </button>
+            </div>
+          </div>
+
+          <button type="submit" id="loginSubmitBtn" 
+            class="w-full py-2.5 px-4 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-semibold text-xs sm:text-sm shadow-lg flex items-center justify-center gap-2">
+            <span id="loginBtnText">Sign In to Dashboard</span>
+            <i class="fa-solid fa-circle-notch fa-spin hidden" id="loginSpinner"></i>
+          </button>
+        </form>
+
+        <div class="mt-6 pt-4 border-t border-slate-800 text-center">
+          <button id="quickInitBtn" type="button" class="text-xs px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 flex items-center justify-center gap-2 mx-auto">
+            <i class="fa-solid fa-database text-brand-400"></i> Initialize Sample Academic Data & Rooms
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ADMIN VIEW -->
+    <section id="adminView" class="hidden flex-col gap-5">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3 overflow-x-auto custom-scrollbar">
+        <div class="flex gap-2 min-w-max">
+          <button onclick="switchAdminTab('classes')" class="admin-tab-btn active px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-brand-600 text-white" data-tab="classes">
+            <i class="fa-solid fa-layer-group mr-1"></i> Classes (Click to Attend)
+          </button>
+          <button onclick="switchAdminTab('overview')" class="admin-tab-btn px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-900 text-slate-400 hover:text-white" data-tab="overview">
+            <i class="fa-solid fa-chart-pie mr-1"></i> Overview
+          </button>
+          <button onclick="switchAdminTab('students')" class="admin-tab-btn px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-900 text-slate-400 hover:text-white" data-tab="students">
+            <i class="fa-solid fa-user-graduate mr-1"></i> Students
+          </button>
+          <button onclick="switchAdminTab('teachers')" class="admin-tab-btn px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-900 text-slate-400 hover:text-white" data-tab="teachers">
+            <i class="fa-solid fa-chalkboard-user mr-1"></i> Teachers
+          </button>
+          <button onclick="switchAdminTab('faceRegistration')" class="admin-tab-btn px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-900 text-slate-400 hover:text-white" data-tab="faceRegistration">
+            <i class="fa-solid fa-camera mr-1"></i> AI Face Registration
+          </button>
+          <button onclick="switchAdminTab('attendanceLogs')" class="admin-tab-btn px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-900 text-slate-400 hover:text-white" data-tab="attendanceLogs">
+            <i class="fa-solid fa-clipboard-check mr-1"></i> Attendance Logs
+          </button>
+        </div>
+      </div>
+
+      <!-- Classes Section -->
+      <div id="adminTab-classes" class="admin-tab-content space-y-4">
+        <div class="flex items-center justify-between gap-2">
+          <div>
+            <h3 class="text-sm font-bold text-white">Click any Class to Start Face Scanning</h3>
+            <p class="text-[11px] text-slate-400">Click to attend or delete mistakenly added classes</p>
+          </div>
+          <button onclick="openAddClassModal()" class="px-3 py-1.5 bg-brand-600 hover:bg-brand-500 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 flex-shrink-0">
+            <i class="fa-solid fa-plus"></i> Create Class
+          </button>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3" id="classCardsContainer"></div>
+      </div>
+
+      <div id="adminTab-overview" class="admin-tab-content hidden space-y-5">
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div class="glass-panel p-4 rounded-xl border border-slate-800">
+            <div class="text-[11px] font-semibold text-slate-400 uppercase">Total Students</div>
+            <div class="text-xl font-bold text-white mt-1" id="adminStatStudents">0</div>
+            <div class="text-[10px] text-brand-400 mt-0.5" id="adminStatBiometricDone">0 Enrolled</div>
+          </div>
+          <div class="glass-panel p-4 rounded-xl border border-slate-800">
+            <div class="text-[11px] font-semibold text-slate-400 uppercase">Faculty Members</div>
+            <div class="text-xl font-bold text-white mt-1" id="adminStatTeachers">0</div>
+            <div class="text-[10px] text-emerald-400 mt-0.5" id="adminStatApprovedTeachers">0 Verified</div>
+          </div>
+          <div class="glass-panel p-4 rounded-xl border border-slate-800">
+            <div class="text-[11px] font-semibold text-slate-400 uppercase">Total Classes</div>
+            <div class="text-xl font-bold text-white mt-1" id="adminStatClasses">0</div>
+            <div class="text-[10px] text-indigo-400 mt-0.5">Active Courses</div>
+          </div>
+          <div class="glass-panel p-4 rounded-xl border border-slate-800">
+            <div class="text-[11px] font-semibold text-slate-400 uppercase">Avg Attendance</div>
+            <div class="text-xl font-bold text-emerald-400 mt-1" id="adminStatAvgAttendance">0%</div>
+            <div class="text-[10px] text-slate-400 mt-0.5" id="adminStatTotalSessions">0 Sessions</div>
+          </div>
+        </div>
+
+        <div class="glass-panel p-5 rounded-2xl border border-slate-800">
+          <h3 class="text-sm font-bold text-white mb-3">Room Utilization (Room 422 vs Room 425)</h3>
+          <div class="h-56">
+            <canvas id="adminRoomPieChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- STUDENTS TAB -->
+      <div id="adminTab-students" class="admin-tab-content hidden space-y-4">
+        <div class="flex items-center justify-between gap-3">
+          <input type="text" id="studentSearchInput" placeholder="Search student..." 
+            class="w-full max-w-xs px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white" />
+          <button onclick="openAddStudentModal()" class="px-3 py-1.5 bg-brand-600 hover:bg-brand-500 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 flex-shrink-0">
+            <i class="fa-solid fa-plus"></i> Add Student
+          </button>
+        </div>
+        <div class="glass-panel rounded-xl border border-slate-800 overflow-x-auto">
+          <table class="w-full text-left text-xs">
+            <thead class="bg-slate-900/90 text-slate-400 uppercase tracking-wider border-b border-slate-800">
+              <tr>
+                <th class="p-2.5">ID</th>
+                <th class="p-2.5">Name</th>
+                <th class="p-2.5">Class</th>
+                <th class="p-2.5">Roll</th>
+                <th class="p-2.5">Face Enrolled</th>
+                <th class="p-2.5 text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody id="studentTableBody" class="divide-y divide-slate-800 text-slate-300">
+              <tr><td colspan="6" class="p-4 text-center text-slate-500">No students found.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- TEACHERS TAB -->
+      <div id="adminTab-teachers" class="admin-tab-content hidden space-y-3">
+        <div class="flex items-center justify-between">
+          <div>
+            <h3 class="text-sm font-bold text-white">Faculty Directory</h3>
+            <p class="text-[11px] text-slate-400">Add or remove teachers anytime</p>
+          </div>
+          <button onclick="openAddTeacherModal()" class="px-3 py-1.5 bg-brand-600 hover:bg-brand-500 text-white rounded-xl text-xs font-semibold">
+            <i class="fa-solid fa-user-plus mr-1"></i> Add Faculty
+          </button>
+        </div>
+        <div class="glass-panel rounded-xl border border-slate-800 overflow-x-auto">
+          <table class="w-full text-left text-xs">
+            <thead class="bg-slate-900/90 text-slate-400 uppercase tracking-wider border-b border-slate-800">
+              <tr>
+                <th class="p-2.5">Teacher ID</th>
+                <th class="p-2.5">Name</th>
+                <th class="p-2.5">Email</th>
+                <th class="p-2.5">Face Status</th>
+                <th class="p-2.5 text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody id="teacherTableBody" class="divide-y divide-slate-800 text-slate-300">
+              <tr><td colspan="5" class="p-4 text-center text-slate-500">No teachers found.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- AI FACE REGISTRATION -->
+      <div id="adminTab-faceRegistration" class="admin-tab-content hidden space-y-4">
+        <div class="glass-panel p-5 rounded-2xl border border-slate-800">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+            <div>
+              <h3 class="text-sm font-bold text-white">AI Biometric Face Enrollment</h3>
+              <p class="text-xs text-slate-400">Enroll face biometric for Students or Teachers</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <select id="regTypeSelect" class="bg-slate-900 border border-slate-700 text-xs rounded-xl px-3 py-2 text-white">
+                <option value="student">Student</option>
+                <option value="teacher">Teacher</option>
+              </select>
+              <select id="registerEntitySelect" class="bg-slate-900 border border-slate-700 text-xs rounded-xl px-3 py-2 text-white">
+                <option value="">-- Choose Person --</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="mt-4 grid grid-cols-1 md:grid-cols-12 gap-4">
+            <div class="md:col-span-7 flex flex-col items-center">
+              <div class="video-canvas-container bg-black border border-slate-800 w-full aspect-video rounded-xl flex items-center justify-center relative">
+                <video id="regVideo" autoplay playsinline muted class="w-full h-full object-cover"></video>
+                <canvas id="regCanvas"></canvas>
+                <div id="regScanOverlay" class="pulse-scan hidden"></div>
+                <div id="regCameraPlaceholder" class="absolute inset-0 flex flex-col items-center justify-center bg-slate-950 p-4 text-center">
+                  <i class="fa-solid fa-video-slash text-2xl text-slate-600 mb-2"></i>
+                  <span class="text-xs text-slate-400">Webcam Inactive</span>
+                </div>
+              </div>
+              <div class="flex flex-wrap gap-2 mt-3 w-full justify-center">
+                <button id="startRegCamBtn" class="px-3 py-2 rounded-xl bg-brand-600 hover:bg-brand-500 text-white text-xs font-semibold flex items-center gap-1.5">
+                  <i class="fa-solid fa-camera"></i> Start Cam
+                </button>
+                <button id="captureFaceBtn" disabled class="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-800 text-white text-xs font-semibold">
+                  Capture (<span id="sampleCountText">0/3</span>)
+                </button>
+                <button id="stopRegCamBtn" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs">
+                  Stop
+                </button>
+              </div>
+            </div>
+
+            <div class="md:col-span-5 space-y-3">
+              <div class="bg-slate-900/80 p-4 rounded-xl border border-slate-800 text-xs space-y-2" id="regSelectedDetails">
+                <p class="text-slate-500 italic">No person selected yet.</p>
+              </div>
+              <div class="bg-slate-900/80 p-4 rounded-xl border border-slate-800">
+                <div class="text-[11px] font-bold uppercase text-slate-400 mb-2">Samples Captured</div>
+                <div class="grid grid-cols-3 gap-2" id="sampleThumbnails">
+                  <div class="h-16 bg-slate-950 border border-dashed border-slate-800 rounded-lg flex items-center justify-center text-[10px] text-slate-600">Sample 1</div>
+                  <div class="h-16 bg-slate-950 border border-dashed border-slate-800 rounded-lg flex items-center justify-center text-[10px] text-slate-600">Sample 2</div>
+                  <div class="h-16 bg-slate-950 border border-dashed border-slate-800 rounded-lg flex items-center justify-center text-[10px] text-slate-600">Sample 3</div>
+                </div>
+                <button id="saveBiometricBtn" disabled class="w-full mt-3 py-2 rounded-xl bg-brand-600 hover:bg-brand-500 disabled:bg-slate-800 text-white text-xs font-semibold">
+                  Save Biometrics to Cloud
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="adminTab-attendanceLogs" class="admin-tab-content hidden space-y-3">
+        <h3 class="text-sm font-bold text-white">Attendance Sessions</h3>
+        <div class="glass-panel rounded-xl border border-slate-800 overflow-x-auto">
+          <table class="w-full text-left text-xs">
+            <thead class="bg-slate-900/90 text-slate-400 uppercase tracking-wider border-b border-slate-800">
+              <tr>
+                <th class="p-2.5">Date</th>
+                <th class="p-2.5">Class</th>
+                <th class="p-2.5">Room</th>
+                <th class="p-2.5">Turnout</th>
+                <th class="p-2.5 text-right">Details</th>
+              </tr>
+            </thead>
+            <tbody id="adminSessionTableBody" class="divide-y divide-slate-800 text-slate-300">
+              <tr><td colspan="5" class="p-4 text-center text-slate-500">No sessions recorded yet.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- LIVE ATTENDANCE & BIOMETRIC SCANNER -->
+    <section id="teacherView" class="hidden flex-col gap-4">
+      <div id="teacherChamber" class="space-y-4">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+          
+          <div class="lg:col-span-7 glass-panel p-4 rounded-2xl border border-slate-800 flex flex-col items-center">
+            <div class="w-full flex items-center justify-between mb-2 text-xs">
+              <div class="flex items-center gap-2">
+                <span class="h-2 w-2 rounded-full bg-emerald-500 animate-ping"></span>
+                <span class="font-bold text-white" id="liveRoomBadge">Room 422</span>
+                <span class="text-slate-500">•</span>
+                <span class="text-slate-400 truncate max-w-[180px]" id="liveClassBadge">Class Name</span>
+              </div>
+              <span id="roleIndicatorBadge" class="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">AI Live Scanner</span>
+            </div>
+
+            <div class="video-canvas-container bg-black border border-slate-800 w-full aspect-video rounded-xl flex items-center justify-center relative">
+              <video id="attendVideo" autoplay playsinline muted class="w-full h-full object-cover"></video>
+              <canvas id="attendCanvas"></canvas>
+              <div id="attendScanOverlay" class="pulse-scan"></div>
+
+              <!-- Instant Details Popup -->
+              <div id="detectedNameBanner" class="hidden absolute bottom-3 inset-x-3 bg-slate-900/95 border border-emerald-500/70 backdrop-blur-md p-3 rounded-2xl name-popup-anim shadow-2xl flex items-center justify-between z-20">
+                <div class="flex items-center gap-3">
+                  <div class="h-10 w-10 rounded-xl bg-emerald-500/20 text-emerald-400 font-bold flex items-center justify-center text-lg border border-emerald-500/40">
+                    <i class="fa-solid fa-circle-check"></i>
+                  </div>
+                  <div>
+                    <div class="text-[10px] text-slate-400 uppercase font-bold tracking-wider" id="bannerPersonRole">Student Detected</div>
+                    <div class="text-sm font-extrabold text-white truncate max-w-[170px]" id="bannerPersonName">Name...</div>
+                    <div class="text-[11px] text-brand-300 font-mono" id="bannerPersonSub">Roll: -</div>
+                  </div>
+                </div>
+                <div class="text-right">
+                  <span id="bannerRoleTag" class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">PRESENT</span>
+                  <div class="text-[10px] text-slate-400 mt-1" id="bannerDetectTime">00:00</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="w-full mt-2.5 p-2.5 bg-slate-900/90 rounded-xl border border-slate-800 flex items-center justify-between text-xs">
+              <div id="recognitionFeedback" class="text-slate-300 truncate">
+                Position your face directly in the camera frame.
+              </div>
+              <div id="teacherScanState" class="text-amber-400 text-[10px] flex items-center gap-1">
+                <i class="fa-solid fa-chalkboard-user"></i> Ready for Face Scan
+              </div>
+            </div>
+
+            <div class="w-full mt-3 flex justify-between gap-2">
+              <button onclick="backToClassList()" class="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold">
+                <i class="fa-solid fa-arrow-left mr-1"></i> Switch Class
+              </button>
+              <button id="finishAttendanceBtn" class="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-lg">
+                <i class="fa-solid fa-paper-plane"></i> Finalize Session
+              </button>
+            </div>
+          </div>
+
+          <div class="lg:col-span-5 glass-panel p-4 rounded-2xl border border-slate-800 flex flex-col h-[400px] lg:h-[460px]">
+            <div class="flex items-center justify-between pb-2 border-b border-slate-800">
+              <div>
+                <h3 class="text-xs font-bold text-white">Live Attendance Roster</h3>
+                <p class="text-[10px] text-slate-400">Instant count update on face detection</p>
+              </div>
+              <div class="text-right">
+                <span class="text-base font-extrabold text-emerald-400" id="livePresentCount">0</span>
+                <span class="text-[10px] text-slate-400 block">Present</span>
+              </div>
+            </div>
+
+            <div id="liveStudentRoster" class="flex-1 overflow-y-auto custom-scrollbar space-y-2 mt-2.5 pr-1">
+              <div class="h-full flex flex-col items-center justify-center text-center p-4 text-slate-500">
+                <i class="fa-solid fa-face-smile text-2xl mb-1 text-slate-600"></i>
+                <p class="text-xs">Waiting for student or teacher face...</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
+    import { 
+      getAuth, 
+      signInWithEmailAndPassword, 
+      signOut, 
+      onAuthStateChanged
+    } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js";
+    import { 
+      getFirestore, 
+      collection, 
+      doc, 
+      getDoc, 
+      getDocs, 
+      setDoc, 
+      addDoc, 
+      updateDoc, 
+      deleteDoc,
+      serverTimestamp
+    } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
+
+    emailjs.init("gnl6nXbGuXI17K7TY");
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyCrU6fJwkfvWsiSkeQ-MXkvTagADO_8eyk",
+      authDomain: "face-attendance-system-2f0b5.firebaseapp.com",
+      projectId: "face-attendance-system-2f0b5",
+      storageBucket: "face-attendance-system-2f0b5.firebasestorage.app",
+      messagingSenderId: "577511962862",
+      appId: "1:577511962862:web:8422d6bf7a1d85c9fb9bff",
+      measurementId: "G-3DS0THZGLB"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    window.appState = {
+      currentUser: null,
+      currentUserProfile: null,
+      activeRole: null,
+      students: [],
+      teachers: [],
+      classes: [],
+      attendanceSessions: [],
+      modelsLoaded: false,
+      regMediaStream: null,
+      attendMediaStream: null,
+      regSamples: [],
+      attendRecognitionInterval: null,
+      currentLiveSession: null,
+      recognizedStudentMap: new Map(),
+      charts: {},
+      bannerTimeout: null,
+      principalEmail: "zenxken26@gmail.com",
+      classStartedMailSent: false
+    };
+
+    window.showToast = function(title, message, type = 'info') {
+      const container = document.getElementById('toastContainer');
+      const colors = {
+        success: 'border-emerald-500 bg-emerald-950/90 text-emerald-200',
+        error: 'border-red-500 bg-red-950/90 text-red-200',
+        info: 'border-brand-500 bg-indigo-950/90 text-indigo-200',
+        warning: 'border-amber-500 bg-amber-950/90 text-amber-200'
+      };
+      const toast = document.createElement('div');
+      toast.className = `p-3 rounded-xl border shadow-xl flex items-start gap-2.5 backdrop-blur-md transition-all duration-300 ${colors[type] || colors.info}`;
+      toast.innerHTML = `
+        <div class="flex-1 text-xs">
+          <div class="font-bold text-white">${title}</div>
+          <div class="mt-0.5 text-slate-300">${message}</div>
+        </div>
+      `;
+      container.appendChild(toast);
+      setTimeout(() => toast.remove(), 4000);
+    };
+
+    window.openModal = function(htmlContent) {
+      document.getElementById('modalContent').innerHTML = htmlContent;
+      document.getElementById('globalModalBackdrop').classList.remove('hidden');
+      document.getElementById('globalModalBackdrop').classList.add('flex');
+    };
+    window.closeModal = function() {
+      document.getElementById('globalModalBackdrop').classList.add('hidden');
+      document.getElementById('globalModalBackdrop').classList.remove('flex');
+      document.getElementById('modalContent').innerHTML = '';
+    };
+
+    async function loadFaceApiModels() {
+      if (window.appState.modelsLoaded) return true;
+      try {
+        const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
+        await Promise.all([
+          faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+          faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+          faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
+        ]);
+        window.appState.modelsLoaded = true;
+        return true;
+      } catch (err) {
+        console.error("Model load error:", err);
+        showToast("AI Models", "Could not load face recognition neural nets.", "error");
+        return false;
+      }
+    }
+
+    onAuthStateChanged(auth, async (user) => {
+      const loginSection = document.getElementById('loginSection');
+      const adminView = document.getElementById('adminView');
+      const teacherView = document.getElementById('teacherView');
+      const navUserBadge = document.getElementById('navUserBadge');
+
+      if (user) {
+        window.appState.currentUser = user;
+        let profile = null;
+        try {
+          const userDoc = await getDoc(doc(db, "users", user.uid));
+          if (userDoc.exists()) {
+            profile = userDoc.data();
+          } else {
+            profile = {
+              uid: user.uid,
+              email: user.email,
+              name: user.email.split('@')[0],
+              role: 'Admin',
+              approved: true
+            };
+            await setDoc(doc(db, "users", user.uid), profile);
+          }
+        } catch (e) {
+          profile = { uid: user.uid, email: user.email, name: user.email.split('@')[0], role: 'Admin', approved: true };
+        }
+
+        window.appState.currentUserProfile = profile;
+        window.appState.activeRole = profile.role || 'Admin';
+
+        navUserBadge.classList.remove('hidden');
+        navUserBadge.classList.add('flex');
+        document.getElementById('navUserName').innerText = profile.name || user.email;
+        document.getElementById('navUserRole').innerText = window.appState.activeRole;
+        document.getElementById('navUserAvatar').innerText = (profile.name || user.email).charAt(0).toUpperCase();
+
+        loginSection.classList.add('hidden');
+        adminView.classList.remove('hidden');
+        adminView.classList.add('flex');
+        teacherView.classList.add('hidden');
+
+        await loadAllData();
+        renderAdminDashboard();
+        renderClassesCards();
+        loadFaceApiModels();
+      } else {
+        window.appState.currentUser = null;
+        navUserBadge.classList.add('hidden');
+        loginSection.classList.remove('hidden');
+        adminView.classList.add('hidden');
+        teacherView.classList.add('hidden');
+      }
+    });
+
+    async function loadAllData() {
+      try {
+        const [studSnap, teachSnap, clsSnap, sessSnap] = await Promise.all([
+          getDocs(collection(db, "students")),
+          getDocs(collection(db, "teachers")),
+          getDocs(collection(db, "classes")),
+          getDocs(collection(db, "attendanceSessions"))
+        ]);
+
+        window.appState.students = studSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        window.appState.teachers = teachSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        window.appState.classes = clsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        window.appState.attendanceSessions = sessSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+          .sort((a,b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+
+      } catch (err) {
+        console.error("Data fetch error:", err);
+      }
+    }
+
+    const loginForm = document.getElementById('loginForm');
+    loginForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = document.getElementById('loginEmail').value.trim();
+      const password = document.getElementById('loginPassword').value;
+      const submitBtn = document.getElementById('loginSubmitBtn');
+      const spinner = document.getElementById('loginSpinner');
+      const btnText = document.getElementById('loginBtnText');
+
+      submitBtn.disabled = true;
+      spinner.classList.remove('hidden');
+      btnText.innerText = "Verifying...";
+
+      try {
+        await signInWithEmailAndPassword(auth, email, password);
+        showToast("Success", "Authenticated successfully", "success");
+      } catch (error) {
+        showToast("Login Failed", error.message, "error");
+      } finally {
+        submitBtn.disabled = false;
+        spinner.classList.add('hidden');
+        btnText.innerText = "Sign In to Dashboard";
+      }
+    });
+
+    document.getElementById('togglePasswordBtn').addEventListener('click', () => {
+      const pass = document.getElementById('loginPassword');
+      const icon = document.getElementById('togglePasswordIcon');
+      if (pass.type === 'password') {
+        pass.type = 'text';
+        icon.classList.remove('fa-eye');
+        icon.classList.add('fa-eye-slash');
+      } else {
+        pass.type = 'password';
+        icon.classList.remove('fa-eye-slash');
+        icon.classList.add('fa-eye');
+      }
+    });
+
+    document.getElementById('logoutBtn').addEventListener('click', () => {
+      stopRegCam();
+      stopAttendanceSession();
+      signOut(auth);
+    });
+
+    document.getElementById('quickInitBtn').addEventListener('click', async () => {
+      const sampleStudents = [
+        { studentId: "NIT-CSE-01", fullName: "Aarav Sharma", email: "aarav@nit.ac.in", phone: "9876543210", classId: "B.Tech - CSE (3rd Year)", rollNo: "01", status: "Active", faceRegistered: false },
+        { studentId: "NIT-CSE-02", fullName: "Riya Sen", email: "riya@nit.ac.in", phone: "9876543211", classId: "B.Tech - CSE (3rd Year)", rollNo: "02", status: "Active", faceRegistered: false }
+      ];
+      const sampleTeachers = [
+        { teacherId: "TCH-NIT-101", fullName: "Dr. S. Mukherjee", email: "faculty@nit.ac.in", department: "Computer Science & Engineering", assignedClasses: ["B.Tech - CSE (3rd Year)"], status: "Active", approved: true, faceRegistered: false }
+      ];
+      const sampleClasses = [
+        { classId: "B.Tech - CSE (3rd Year)", className: "B.Tech CSE - 3rd Year", department: "Computer Science & Engineering", semester: "5th Sem", assignedTeacherId: "TCH-NIT-101", status: "Active" }
+      ];
+
+      try {
+        for (const s of sampleStudents) await setDoc(doc(db, "students", s.studentId), s);
+        for (const t of sampleTeachers) await setDoc(doc(db, "teachers", t.teacherId), t);
+        for (const c of sampleClasses) await setDoc(doc(db, "classes", c.classId), c);
+        showToast("Database Ready", "Institutional directory seeded!", "success");
+        await loadAllData();
+        renderAdminDashboard();
+        renderClassesCards();
+      } catch (err) {
+        showToast("Error", err.message, "error");
+      }
+    });
+
+    window.switchAdminTab = function(tabName) {
+      document.querySelectorAll('.admin-tab-btn').forEach(btn => {
+        if (btn.dataset.tab === tabName) {
+          btn.className = "admin-tab-btn active px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-brand-600 text-white";
+        } else {
+          btn.className = "admin-tab-btn px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-900 text-slate-400 hover:text-white";
+        }
+      });
+      document.querySelectorAll('.admin-tab-content').forEach(tc => tc.classList.add('hidden'));
+      const activeContent = document.getElementById(`adminTab-${tabName}`);
+      if (activeContent) activeContent.classList.remove('hidden');
+
+      if (tabName === 'classes') renderClassesCards();
+      if (tabName === 'students') renderStudentsTable();
+      if (tabName === 'teachers') renderTeachersTable();
+      if (tabName === 'attendanceLogs') renderAttendanceLogsTable();
+      if (tabName === 'faceRegistration') populateFaceRegistrationDropdown();
+    };
+
+    function renderAdminDashboard() {
+      const studs = window.appState.students;
+      const techs = window.appState.teachers;
+      const clss = window.appState.classes;
+      const sess = window.appState.attendanceSessions;
+
+      document.getElementById('adminStatStudents').innerText = studs.length;
+      document.getElementById('adminStatBiometricDone').innerText = `${studs.filter(s => s.faceRegistered).length} Enrolled`;
+      document.getElementById('adminStatTeachers').innerText = techs.length;
+      document.getElementById('adminStatApprovedTeachers').innerText = `${techs.filter(t => t.approved).length} Verified`;
+      document.getElementById('adminStatClasses').innerText = clss.length;
+
+      const avg = sess.length > 0 ? (sess.reduce((acc, c) => acc + (c.attendancePercentage || 0), 0) / sess.length).toFixed(1) : 0;
+      document.getElementById('adminStatAvgAttendance').innerText = `${avg}%`;
+      document.getElementById('adminStatTotalSessions').innerText = `${sess.length} Sessions`;
+
+      renderRoomPieChart();
+    }
+
+    function renderRoomPieChart() {
+      const sess = window.appState.attendanceSessions;
+      const count422 = sess.filter(s => s.room === 'Room 422').length;
+      const count425 = sess.filter(s => s.room === 'Room 425').length;
+
+      const canvas = document.getElementById('adminRoomPieChart');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      if (window.appState.charts.adminRoomPie) window.appState.charts.adminRoomPie.destroy();
+
+      window.appState.charts.adminRoomPie = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: ['Room 422', 'Room 425'],
+          datasets: [{
+            data: [count422 || 1, count425],
+            backgroundColor: ['#6366f1', '#06b6d4'],
+            borderWidth: 0
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { position: 'bottom', labels: { color: '#94a3b8' } } }
+        }
+      });
+    }
+
+    function renderClassesCards() {
+      const container = document.getElementById('classCardsContainer');
+      const clss = window.appState.classes;
+      if (clss.length === 0) {
+        container.innerHTML = `<div class="col-span-full p-6 text-center text-slate-500 glass-panel rounded-2xl">No classes found. Click "+ Create Class" to add one.</div>`;
+        return;
+      }
+
+      container.innerHTML = clss.map(c => `
+        <div onclick="handleClassClick('${c.classId}')" class="glass-panel p-4 rounded-2xl border border-slate-800 hover:border-brand-500 cursor-pointer transition relative group">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-[10px] px-2 py-0.5 rounded-full bg-brand-500/20 text-brand-300 font-semibold border border-brand-500/30">
+              ${c.semester || 'Active'}
+            </span>
+            <button onclick="confirmDeleteClass('${c.classId}', event)" title="Delete Class" class="h-7 w-7 rounded-lg bg-red-500/10 hover:bg-red-500/30 text-red-400 flex items-center justify-center transition border border-red-500/20">
+              <i class="fa-solid fa-trash-can text-xs"></i>
+            </button>
+          </div>
+          <h4 class="text-sm font-bold text-white group-hover:text-brand-300 transition">${c.className}</h4>
+          <p class="text-[11px] text-slate-400 mt-1">${c.department || 'NIT Campus'}</p>
+          <div class="mt-3 pt-3 border-t border-slate-800 flex items-center justify-between text-[11px] text-slate-500">
+            <span>${window.appState.students.filter(s => s.classId === c.classId).length} Enrolled</span>
+            <span class="text-emerald-400 font-semibold">Click to Attend <i class="fa-solid fa-arrow-right ml-1"></i></span>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    window.confirmDeleteClass = async function(classId, event) {
+      if (event) event.stopPropagation();
+      const isConfirmed = confirm(`Are you sure you want to delete class: "${classId}"?`);
+      if (!isConfirmed) return;
+
+      try {
+        await deleteDoc(doc(db, "classes", classId));
+        showToast("Class Deleted", `Class ${classId} removed.`, "info");
+        await loadAllData();
+        renderClassesCards();
+      } catch (err) {
+        showToast("Error", err.message, "error");
+      }
+    };
+
+    window.handleClassClick = function(classId) {
+      const targetClass = window.appState.classes.find(c => c.classId === classId);
+      if (!targetClass) return;
+
+      const html = `
+        <div class="text-center pb-3 border-b border-slate-800">
+          <div class="h-10 w-10 rounded-xl bg-brand-600/20 text-brand-400 flex items-center justify-center text-xl mx-auto mb-2">
+            <i class="fa-solid fa-camera"></i>
+          </div>
+          <h3 class="text-base font-bold text-white">${targetClass.className}</h3>
+          <p class="text-xs text-slate-400 mt-0.5">Please select your role to proceed</p>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3 my-4">
+          <button onclick="startSessionWithRole('${classId}', 'Student')" class="p-4 rounded-xl bg-slate-900 border border-slate-700 hover:border-emerald-500 hover:bg-emerald-950/20 transition flex flex-col items-center gap-2 group text-center">
+            <div class="h-11 w-11 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center text-xl group-hover:scale-110 transition">
+              <i class="fa-solid fa-user-graduate"></i>
+            </div>
+            <div>
+              <div class="font-bold text-xs text-white">Student</div>
+              <div class="text-[10px] text-slate-400 mt-0.5">Scan Face to Count Attendance</div>
+            </div>
+          </button>
+
+          <button onclick="startSessionWithRole('${classId}', 'Teacher')" class="p-4 rounded-xl bg-slate-900 border border-slate-700 hover:border-brand-500 hover:bg-brand-950/20 transition flex flex-col items-center gap-2 group text-center">
+            <div class="h-11 w-11 rounded-xl bg-brand-500/10 text-brand-400 flex items-center justify-center text-xl group-hover:scale-110 transition">
+              <i class="fa-solid fa-chalkboard-user"></i>
+            </div>
+            <div>
+              <div class="font-bold text-xs text-white">Teacher</div>
+              <div class="text-[10px] text-slate-400 mt-0.5">Scan Face & Notify via Mail</div>
+            </div>
+          </button>
+        </div>
+      `;
+      openModal(html);
+    };
+
+    window.startSessionWithRole = async function(classId, role) {
+      closeModal();
+
+      const selectedClass = window.appState.classes.find(c => c.classId === classId);
+      const enrolledStudents = window.appState.students.filter(s => s.classId === classId);
+      const biometricStudents = enrolledStudents.filter(s => s.faceRegistered && s.faceDescriptor);
+
+      window.appState.classStartedMailSent = false;
+      window.appState.currentLiveSession = {
+        classId: classId,
+        className: selectedClass ? selectedClass.className : classId,
+        teacherId: selectedClass?.assignedTeacherId || 'TCH-NIT-101',
+        teacherName: 'Prof. ' + (selectedClass?.assignedTeacherId || 'Faculty'),
+        room: 'Room 422',
+        roleMode: role,
+        startTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        date: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }),
+        totalStudents: enrolledStudents.length || 1,
+        enrolledStudents: enrolledStudents,
+        biometricStudents: biometricStudents
+      };
+
+      document.getElementById('adminView')?.classList.add('hidden');
+      document.getElementById('teacherView')?.classList.remove('hidden');
+      document.getElementById('teacherView')?.classList.add('flex');
+
+      document.getElementById('liveRoomBadge').innerText = `Room 422 (${role} Mode)`;
+      document.getElementById('liveClassBadge').innerText = window.appState.currentLiveSession.className;
+      document.getElementById('roleIndicatorBadge').innerText = `${role} Mode Active`;
+      document.getElementById('livePresentCount').innerText = Array.from(window.appState.recognizedStudentMap.values()).filter(v => v.markedPresent).length;
+
+      showToast("Ready", `Position your face in front of the camera.`, "info");
+      await startRealTimeFaceRecognition();
+    };
+
+    window.backToClassList = function() {
+      stopAttendanceSession();
+      document.getElementById('teacherView')?.classList.add('hidden');
+      document.getElementById('adminView')?.classList.remove('hidden');
+      document.getElementById('adminView')?.classList.add('flex');
+      switchAdminTab('classes');
+    };
+
+    function euclideanDistance(v1, v2) {
+      let sum = 0;
+      for (let i = 0; i < 128; i++) {
+        const diff = v1[i] - v2[i];
+        sum += diff * diff;
+      }
+      return Math.sqrt(sum);
+    }
+
+    async function startRealTimeFaceRecognition() {
+      await loadFaceApiModels();
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: 640, height: 480, facingMode: 'user' }
+        });
+        window.appState.attendMediaStream = stream;
+        const video = document.getElementById('attendVideo');
+        video.srcObject = stream;
+
+        video.onloadedmetadata = () => {
+          runAttendanceRecognitionLoop();
+        };
+      } catch (err) {
+        showToast("Camera Error", "Webcam access denied or unavailable.", "error");
+      }
+    }
+
+    function runAttendanceRecognitionLoop() {
+      const video = document.getElementById('attendVideo');
+      const canvas = document.getElementById('attendCanvas');
+      const feedback = document.getElementById('recognitionFeedback');
+      
+      const displaySize = { width: video.videoWidth || 640, height: video.videoHeight || 480 };
+      canvas.width = displaySize.width;
+      canvas.height = displaySize.height;
+
+      const studentCandidates = window.appState.currentLiveSession?.biometricStudents || [];
+      const teacherCandidates = window.appState.teachers.filter(t => t.faceRegistered && t.faceDescriptor);
+      let teacherDetectionCounter = 0;
+
+      window.appState.attendRecognitionInterval = setInterval(async () => {
+        if (!video || video.paused || video.ended) return;
+
+        const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.5 }))
+          .withFaceLandmarks()
+          .withFaceDescriptors();
+
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        if (detections.length === 0) {
+          feedback.innerHTML = `<span class="text-slate-400">Position face within camera view</span>`;
+          return;
+        }
+
+        feedback.innerHTML = `<span class="text-indigo-400 font-semibold">${detections.length} face(s) scanning...</span>`;
+
+        detections.forEach(det => {
+          const box = det.detection.box;
+          const descriptor = Array.from(det.descriptor);
+
+          let bestTeacherMatch = null;
+          let minTeacherDist = 1.0;
+          teacherCandidates.forEach(tch => {
+            const dist = euclideanDistance(descriptor, tch.faceDescriptor);
+            if (dist < minTeacherDist) {
+              minTeacherDist = dist;
+              bestTeacherMatch = tch;
+            }
+          });
+
+          let bestStudentMatch = null;
+          let minStudentDist = 1.0;
+          studentCandidates.forEach(stud => {
+            const dist = euclideanDistance(descriptor, stud.faceDescriptor);
+            if (dist < minStudentDist) {
+              minStudentDist = dist;
+              bestStudentMatch = stud;
+            }
+          });
+
+          const isTeacherMode = window.appState.currentLiveSession?.roleMode === 'Teacher';
+
+          if ((bestTeacherMatch && minTeacherDist <= 0.55) || isTeacherMode) {
+            teacherDetectionCounter++;
+            ctx.strokeStyle = '#6366f1';
+            ctx.lineWidth = 3;
+            ctx.strokeRect(box.x, box.y, box.width, box.height);
+
+            const teacherDisplayName = bestTeacherMatch ? bestTeacherMatch.fullName : (window.appState.currentUserProfile?.name || 'Faculty Member');
+            drawNameTag(ctx, box, `${teacherDisplayName} [Teacher]`);
+            triggerFullDetailsBanner(teacherDisplayName, "Teacher / Faculty", `Verified Biometrics | Subject: ${window.appState.currentLiveSession?.className || 'NIT'}`);
+
+            if (teacherDetectionCounter >= 2 && !window.appState.classStartedMailSent) {
+              window.appState.classStartedMailSent = true;
+              sendClassStartNotificationEmail(teacherDisplayName);
+            }
+          } else if (bestStudentMatch && minStudentDist <= 0.55) {
+            ctx.strokeStyle = '#10b981';
+            ctx.lineWidth = 3;
+            ctx.strokeRect(box.x, box.y, box.width, box.height);
+
+            drawNameTag(ctx, box, `${bestStudentMatch.fullName} [Roll: ${bestStudentMatch.rollNo || '✓'}]`);
+            triggerFullDetailsBanner(bestStudentMatch.fullName, "Student", `Roll: ${bestStudentMatch.rollNo || '-'} | ID: ${bestStudentMatch.studentId}`);
+            handleStudentDetected(bestStudentMatch, minStudentDist);
+          } else {
+            ctx.strokeStyle = '#ef4444';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(box.x, box.y, box.width, box.height);
+            drawNameTag(ctx, box, `Scanning Face...`);
+          }
+        });
+      }, 350);
+    }
+
+    async function sendClassStartNotificationEmail(teacherName) {
+      const session = window.appState.currentLiveSession;
+      if (!session) return;
+
+      const emailParams = {
+        to_email: window.appState.principalEmail,
+        principal_email: window.appState.principalEmail,
+        class_name: session.className,
+        teacher_name: teacherName,
+        date: session.date,
+        time: session.startTime,
+        room: session.room || "Room 422",
+        status: "Class Has Officially Started",
+        notes: `Teacher ${teacherName} verified their biometric face scan. Class is now officially active.`
+      };
+
+      try {
+        await emailjs.send("service_6agpi3k", "template_skoug4p", emailParams);
+        showToast("Mail Dispatched", `Notification sent to ${window.appState.principalEmail}`, "success");
+      } catch (err) {
+        console.error("Email send failed:", err);
+      }
+    }
+
+    function drawNameTag(ctx, box, label) {
+      ctx.font = 'bold 12px Inter, sans-serif';
+      const textWidth = ctx.measureText(label).width;
+      const boxY = box.y > 24 ? box.y - 24 : box.y + box.height + 4;
+
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
+      ctx.fillRect(box.x, boxY, textWidth + 12, 20);
+      ctx.fillStyle = '#f8fafc';
+      ctx.fillText(label, box.x + 6, boxY + 14);
+    }
+
+    function triggerFullDetailsBanner(name, role, subDetails) {
+      const banner = document.getElementById('detectedNameBanner');
+      document.getElementById('bannerPersonName').innerText = name;
+      document.getElementById('bannerPersonRole').innerText = role;
+      document.getElementById('bannerPersonSub').innerText = subDetails;
+      document.getElementById('bannerDetectTime').innerText = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      banner.classList.remove('hidden');
+
+      if (window.appState.bannerTimeout) clearTimeout(window.appState.bannerTimeout);
+      window.appState.bannerTimeout = setTimeout(() => {
+        banner.classList.add('hidden');
+      }, 3000);
+    }
+
+    function handleStudentDetected(student, distance) {
+      const map = window.appState.recognizedStudentMap;
+      const now = Date.now();
+
+      if (!map.has(student.studentId)) {
+        map.set(student.studentId, {
+          student: student,
+          firstDetected: now,
+          detections: 1,
+          markedPresent: false,
+          distance: distance
+        });
+      } else {
+        const item = map.get(student.studentId);
+        item.detections += 1;
+        if (item.detections >= 2 && !item.markedPresent) {
+          item.markedPresent = true;
+          item.markedTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+          addStudentToLiveRosterUI(student, item.markedTime);
+          showToast("Counted", `${student.fullName} marked Present`, "success");
+        }
+      }
+    }
+
+    function addStudentToLiveRosterUI(student, time) {
+      const roster = document.getElementById('liveStudentRoster');
+      if (roster.querySelector('.fa-face-smile')) roster.innerHTML = '';
+
+      const card = document.createElement('div');
+      card.className = "p-2.5 bg-slate-900/90 rounded-xl border border-emerald-500/40 flex items-center justify-between text-xs name-popup-anim";
+      card.innerHTML = `
+        <div class="flex items-center gap-2">
+          <div class="h-7 w-7 rounded-full bg-emerald-500/20 text-emerald-400 font-bold flex items-center justify-center text-xs">
+            ${student.rollNo || '✓'}
+          </div>
+          <div>
+            <div class="font-bold text-white text-xs">${student.fullName}</div>
+            <div class="text-[10px] text-slate-400">${student.studentId}</div>
+          </div>
+        </div>
+        <div class="text-right">
+          <span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-500/20 text-emerald-400">PRESENT</span>
+          <div class="text-[9px] text-slate-500">${time}</div>
+        </div>
+      `;
+      roster.prepend(card);
+
+      const presentCount = Array.from(window.appState.recognizedStudentMap.values()).filter(v => v.markedPresent).length;
+      document.getElementById('livePresentCount').innerText = presentCount;
+    }
+
+    function stopAttendanceSession() {
+      if (window.appState.attendRecognitionInterval) {
+        clearInterval(window.appState.attendRecognitionInterval);
+        window.appState.attendRecognitionInterval = null;
+      }
+      if (window.appState.attendMediaStream) {
+        window.appState.attendMediaStream.getTracks().forEach(t => t.stop());
+        window.appState.attendMediaStream = null;
+      }
+    }
+
+    document.getElementById('finishAttendanceBtn')?.addEventListener('click', async () => {
+      stopAttendanceSession();
+      const session = window.appState.currentLiveSession;
+      if (!session) return;
+
+      const endTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const recognizedMap = window.appState.recognizedStudentMap;
+
+      const attendanceRecords = [];
+      let presentCount = 0;
+
+      session.enrolledStudents.forEach(st => {
+        const isPresent = recognizedMap.has(st.studentId) && recognizedMap.get(st.studentId).markedPresent;
+        if (isPresent) {
+          presentCount++;
+          attendanceRecords.push({
+            studentId: st.studentId,
+            studentName: st.fullName,
+            rollNo: st.rollNo || '',
+            status: 'Present',
+            time: recognizedMap.get(st.studentId).markedTime || endTime,
+            room: session.room
+          });
+        } else {
+          attendanceRecords.push({
+            studentId: st.studentId,
+            studentName: st.fullName,
+            rollNo: st.rollNo || '',
+            status: 'Absent',
+            time: '-',
+            room: session.room
+          });
+        }
+      });
+
+      const totalStudents = session.totalStudents || 1;
+      const percentage = Math.round((presentCount / totalStudents) * 100);
+
+      const sessionDocData = {
+        classId: session.classId,
+        className: session.className,
+        teacherId: session.teacherId,
+        teacherName: session.teacherName,
+        room: session.room,
+        date: session.date,
+        startTime: session.startTime,
+        endTime: endTime,
+        totalStudents: totalStudents,
+        presentCount: presentCount,
+        absentCount: totalStudents - presentCount,
+        attendancePercentage: percentage,
+        status: "Completed",
+        records: attendanceRecords,
+        timestamp: serverTimestamp()
+      };
+
+      try {
+        await addDoc(collection(db, "attendanceSessions"), sessionDocData);
+        showToast("Success", "Attendance saved to cloud ledger.", "success");
+      } catch (err) {
+        console.error("Firestore save error:", err);
+      }
+
+      backToClassList();
+      await loadAllData();
+    });
+
+    function renderStudentsTable() {
+      const tbody = document.getElementById('studentTableBody');
+      const studs = window.appState.students;
+      if (studs.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-slate-500">No students registered yet.</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = studs.map(s => `
+        <tr class="hover:bg-slate-900/40">
+          <td class="p-2.5 font-semibold text-white">${s.studentId}</td>
+          <td class="p-2.5">${s.fullName}</td>
+          <td class="p-2.5 text-slate-400">${s.classId || 'N/A'}</td>
+          <td class="p-2.5">${s.rollNo || '-'}</td>
+          <td class="p-2.5">
+            ${s.faceRegistered 
+              ? `<span class="px-2 py-0.5 rounded-full text-[10px] bg-emerald-500/20 text-emerald-400">Yes</span>`
+              : `<span class="px-2 py-0.5 rounded-full text-[10px] bg-amber-500/20 text-amber-400">Pending</span>`}
+          </td>
+          <td class="p-2.5 text-right">
+            <button onclick="deleteStudentRecord('${s.studentId}')" class="text-slate-500 hover:text-red-400">
+              <i class="fa-solid fa-trash"></i>
+            </button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    window.deleteStudentRecord = async function(id) {
+      try {
+        await deleteDoc(doc(db, "students", id));
+        showToast("Removed", `Student ${id} deleted`, "info");
+        await loadAllData();
+        renderStudentsTable();
+      } catch (err) {
+        showToast("Error", err.message, "error");
+      }
+    };
+
+    function renderTeachersTable() {
+      const tbody = document.getElementById('teacherTableBody');
+      const techs = window.appState.teachers;
+      if (techs.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-slate-500">No faculty members found.</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = techs.map(t => `
+        <tr class="hover:bg-slate-900/40">
+          <td class="p-2.5 font-semibold text-white">${t.teacherId}</td>
+          <td class="p-2.5">${t.fullName}</td>
+          <td class="p-2.5 text-slate-400">${t.email}</td>
+          <td class="p-2.5">
+            ${t.faceRegistered 
+              ? `<span class="px-2 py-0.5 rounded-full text-[10px] bg-emerald-500/20 text-emerald-400">Enrolled</span>`
+              : `<span class="px-2 py-0.5 rounded-full text-[10px] bg-amber-500/20 text-amber-400">Pending</span>`}
+          </td>
+          <td class="p-2.5 text-right">
+            <button onclick="deleteTeacherRecord('${t.teacherId}')" title="Delete Teacher" class="text-slate-500 hover:text-red-400 p-1">
+              <i class="fa-solid fa-trash-can text-sm"></i>
+            </button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    window.deleteTeacherRecord = async function(id) {
+      const isConfirmed = confirm(`Are you sure you want to delete teacher: "${id}"?`);
+      if (!isConfirmed) return;
+
+      try {
+        await deleteDoc(doc(db, "teachers", id));
+        showToast("Teacher Deleted", `Teacher ${id} removed successfully.`, "info");
+        await loadAllData();
+        renderTeachersTable();
+        populateFaceRegistrationDropdown();
+      } catch (err) {
+        showToast("Error", err.message, "error");
+      }
+    };
+
+    function renderAttendanceLogsTable() {
+      const tbody = document.getElementById('adminSessionTableBody');
+      const sess = window.appState.attendanceSessions;
+      if (sess.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-slate-500">No attendance sessions recorded yet.</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = sess.map(s => `
+        <tr class="hover:bg-slate-900/40">
+          <td class="p-2.5 text-white">${s.date} ${s.startTime || ''}</td>
+          <td class="p-2.5 font-semibold">${s.className}</td>
+          <td class="p-2.5 text-brand-300">${s.room}</td>
+          <td class="p-2.5 font-bold text-emerald-400">${s.presentCount} / ${s.totalStudents} (${s.attendancePercentage}%)</td>
+          <td class="p-2.5 text-right"><span class="text-[10px] text-slate-400">Saved</span></td>
+        </tr>
+      `).join('');
+    }
+
+    function populateFaceRegistrationDropdown() {
+      const type = document.getElementById('regTypeSelect')?.value || 'student';
+      const select = document.getElementById('registerEntitySelect');
+      if (!select) return;
+
+      if (type === 'student') {
+        select.innerHTML = `<option value="">-- Choose Student to Enroll --</option>` +
+          window.appState.students.map(s => `
+            <option value="${s.studentId}">
+              ${s.fullName} (${s.studentId}) - ${s.faceRegistered ? '✓ Enrolled' : 'Pending'}
+            </option>
+          `).join('');
+      } else {
+        select.innerHTML = `<option value="">-- Choose Teacher to Enroll --</option>` +
+          window.appState.teachers.map(t => `
+            <option value="${t.teacherId}">
+              ${t.fullName} (${t.teacherId}) - ${t.faceRegistered ? '✓ Enrolled' : 'Pending'}
+            </option>
+          `).join('');
+      }
+    }
+
+    document.getElementById('regTypeSelect')?.addEventListener('change', () => {
+      populateFaceRegistrationDropdown();
+      document.getElementById('regSelectedDetails').innerHTML = `<p class="text-slate-500 italic">No person selected yet.</p>`;
+      window.appState.regSamples = [];
+      updateSampleUI();
+    });
+
+    document.getElementById('registerEntitySelect')?.addEventListener('change', (e) => {
+      const id = e.target.value;
+      const type = document.getElementById('regTypeSelect').value;
+      const detailsContainer = document.getElementById('regSelectedDetails');
+
+      if (!id) {
+        detailsContainer.innerHTML = `<p class="text-slate-500 italic">No person selected yet.</p>`;
+        return;
+      }
+
+      if (type === 'student') {
+        const stud = window.appState.students.find(s => s.studentId === id);
+        if (stud) {
+          detailsContainer.innerHTML = `
+            <div><span class="text-slate-400">Role:</span> <span class="font-bold text-emerald-400">Student</span></div>
+            <div><span class="text-slate-400">Name:</span> <span class="font-bold text-white">${stud.fullName}</span></div>
+            <div><span class="text-slate-400">ID:</span> <span class="text-brand-300 font-mono">${stud.studentId}</span></div>
+            <div><span class="text-slate-400">Class:</span> <span class="text-slate-300">${stud.classId}</span></div>
+          `;
+        }
+      } else {
+        const tch = window.appState.teachers.find(t => t.teacherId === id);
+        if (tch) {
+          detailsContainer.innerHTML = `
+            <div><span class="text-slate-400">Role:</span> <span class="font-bold text-indigo-400">Teacher / Faculty</span></div>
+            <div><span class="text-slate-400">Name:</span> <span class="font-bold text-white">${tch.fullName}</span></div>
+            <div><span class="text-slate-400">ID:</span> <span class="text-brand-300 font-mono">${tch.teacherId}</span></div>
+            <div><span class="text-slate-400">Email:</span> <span class="text-slate-300">${tch.email}</span></div>
+          `;
+        }
+      }
+
+      window.appState.regSamples = [];
+      updateSampleUI();
+    });
+
+    document.getElementById('startRegCamBtn')?.addEventListener('click', async () => {
+      const id = document.getElementById('registerEntitySelect').value;
+      if (!id) {
+        showToast("Notice", "Please select a student or teacher first.", "warning");
+        return;
+      }
+      await loadFaceApiModels();
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480, facingMode: 'user' } });
+        window.appState.regMediaStream = stream;
+        const video = document.getElementById('regVideo');
+        video.srcObject = stream;
+        document.getElementById('regCameraPlaceholder').classList.add('hidden');
+        document.getElementById('regScanOverlay').classList.remove('hidden');
+        document.getElementById('captureFaceBtn').disabled = false;
+      } catch (err) {
+        showToast("Camera Error", "Webcam access denied.", "error");
+      }
+    });
+
+    function stopRegCam() {
+      if (window.appState.regMediaStream) {
+        window.appState.regMediaStream.getTracks().forEach(t => t.stop());
+        window.appState.regMediaStream = null;
+      }
+      document.getElementById('regCameraPlaceholder')?.classList.remove('hidden');
+      document.getElementById('regScanOverlay')?.classList.add('hidden');
+      if (document.getElementById('captureFaceBtn')) document.getElementById('captureFaceBtn').disabled = true;
+    }
+    document.getElementById('stopRegCamBtn')?.addEventListener('click', stopRegCam);
+
+    document.getElementById('captureFaceBtn')?.addEventListener('click', async () => {
+      const video = document.getElementById('regVideo');
+      if (!video || !video.srcObject) return;
+
+      const detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
+        .withFaceLandmarks()
+        .withFaceDescriptor();
+
+      if (!detection) {
+        showToast("No Face Detected", "Please position face clearly in camera.", "warning");
+        return;
+      }
+
+      window.appState.regSamples.push(Array.from(detection.descriptor));
+      updateSampleUI();
+
+      if (window.appState.regSamples.length >= 3) {
+        document.getElementById('captureFaceBtn').disabled = true;
+        document.getElementById('saveBiometricBtn').disabled = false;
+        showToast("Complete", "3 samples captured. Click Save Biometrics.", "success");
+      }
+    });
+
+    function updateSampleUI() {
+      const count = window.appState.regSamples.length;
+      document.getElementById('sampleCountText').innerText = `${count}/3`;
+      const thumbs = document.getElementById('sampleThumbnails').children;
+      for (let i = 0; i < 3; i++) {
+        if (i < count) {
+          thumbs[i].className = "h-16 bg-emerald-950/60 border border-emerald-500 rounded-lg flex items-center justify-center text-xs text-emerald-300 font-semibold";
+          thumbs[i].innerHTML = `<i class="fa-solid fa-check mr-1"></i> Sample ${i + 1}`;
+        } else {
+          thumbs[i].className = "h-16 bg-slate-950 border border-dashed border-slate-800 rounded-lg flex items-center justify-center text-[10px] text-slate-600";
+          thumbs[i].innerHTML = `Sample ${i + 1}`;
+        }
+      }
+    }
+
+    document.getElementById('saveBiometricBtn')?.addEventListener('click', async () => {
+      const id = document.getElementById('registerEntitySelect').value;
+      const type = document.getElementById('regTypeSelect').value;
+      if (!id || window.appState.regSamples.length < 3) return;
+
+      const avgDescriptor = new Array(128).fill(0);
+      for (let i = 0; i < 128; i++) {
+        let sum = 0;
+        for (const sample of window.appState.regSamples) sum += sample[i];
+        avgDescriptor[i] = sum / window.appState.regSamples.length;
+      }
+
+      try {
+        const targetCollection = type === 'student' ? 'students' : 'teachers';
+        await updateDoc(doc(db, targetCollection, id), {
+          faceRegistered: true,
+          faceDescriptor: avgDescriptor,
+          biometricUpdatedAt: serverTimestamp()
+        });
+
+        showToast("Saved", `Biometrics enrolled for ${id}!`, "success");
+        stopRegCam();
+        window.appState.regSamples = [];
+        updateSampleUI();
+        document.getElementById('saveBiometricBtn').disabled = true;
+        await loadAllData();
+        renderStudentsTable();
+        renderTeachersTable();
+        populateFaceRegistrationDropdown();
+      } catch (err) {
+        showToast("Error", err.message, "error");
+      }
+    });
+
+    window.openAddClassModal = function() {
+      const html = `
+        <h3 class="text-sm font-bold text-white mb-3">Register Academic Class</h3>
+        <form id="addClassForm" class="space-y-3">
+          <div>
+            <label class="text-[11px] text-slate-400 block mb-1">Class ID *</label>
+            <input type="text" id="mClsId" required placeholder="B.Tech - CSE (3rd Year)" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-white" />
+          </div>
+          <div>
+            <label class="text-[11px] text-slate-400 block mb-1">Class Name *</label>
+            <input type="text" id="mClsName" required placeholder="B.Tech CSE - 3rd Year" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-white" />
+          </div>
+          <div>
+            <label class="text-[11px] text-slate-400 block mb-1">Department</label>
+            <input type="text" id="mClsDept" placeholder="Computer Science & Engineering" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-white" />
+          </div>
+          <button type="submit" class="w-full py-2.5 bg-brand-600 hover:bg-brand-500 rounded-xl text-white font-semibold text-xs mt-3">Create Class</button>
+        </form>
+      `;
+      openModal(html);
+
+      document.getElementById('addClassForm').onsubmit = async (e) => {
+        e.preventDefault();
+        const cid = document.getElementById('mClsId').value.trim();
+        const data = {
+          classId: cid,
+          className: document.getElementById('mClsName').value.trim(),
+          department: document.getElementById('mClsDept').value.trim(),
+          semester: "Active",
+          status: 'Active',
+          createdAt: serverTimestamp()
+        };
+        try {
+          await setDoc(doc(db, "classes", cid), data);
+          closeModal();
+          await loadAllData();
+          renderClassesCards();
+          showToast("Created", `Class ${cid} registered`, "success");
+        } catch (err) {
+          showToast("Error", err.message, "error");
+        }
+      };
+    };
+
+    // FIXED ADD STUDENT MODAL: ALWAYS PROVIDES VALID CLASS OPTIONS
+    window.openAddStudentModal = function() {
+      // Gather active classes or use default list so dropdown is never empty
+      let availableClasses = window.appState.classes.map(c => ({ id: c.classId, name: c.className }));
+      if (availableClasses.length === 0) {
+        availableClasses = [
+          { id: "B.Tech - CSE (3rd Year)", name: "B.Tech CSE - 3rd Year" },
+          { id: "B.Tech - IT (2nd Year)", name: "B.Tech IT - 2nd Year" },
+          { id: "B.Tech - ECE (1st Year)", name: "B.Tech ECE - 1st Year" }
+        ];
+      }
+
+      const classOptionsHtml = availableClasses.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+
+      const html = `
+        <h3 class="text-sm font-bold text-white mb-3">Add Student</h3>
+        <form id="addStudentForm" class="space-y-3">
+          <div>
+            <label class="text-[11px] text-slate-400 block mb-1">Student ID *</label>
+            <input type="text" id="mStudId" required placeholder="NIT-CSE-24-001" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-white" />
+          </div>
+          <div>
+            <label class="text-[11px] text-slate-400 block mb-1">Full Name *</label>
+            <input type="text" id="mStudName" required placeholder="Student Name" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-white" />
+          </div>
+          <div>
+            <label class="text-[11px] text-slate-400 block mb-1">Assign Class *</label>
+            <select id="mStudClass" required class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-white">
+              <option value="">-- Choose Class --</option>
+              ${classOptionsHtml}
+            </select>
+          </div>
+          <div>
+            <label class="text-[11px] text-slate-400 block mb-1">Roll Number</label>
+            <input type="text" id="mStudRoll" placeholder="01" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-white" />
+          </div>
+          <button type="submit" class="w-full py-2.5 bg-brand-600 hover:bg-brand-500 rounded-xl text-white font-semibold text-xs mt-3">Save Student</button>
+        </form>
+      `;
+      openModal(html);
+
+      document.getElementById('addStudentForm').onsubmit = async (e) => {
+        e.preventDefault();
+        const sid = document.getElementById('mStudId').value.trim();
+        const selectedClass = document.getElementById('mStudClass').value;
+
+        if (!selectedClass) {
+          showToast("Warning", "Please select a valid class for the student.", "warning");
+          return;
+        }
+
+        const data = {
+          studentId: sid,
+          fullName: document.getElementById('mStudName').value.trim(),
+          classId: selectedClass,
+          rollNo: document.getElementById('mStudRoll').value.trim(),
+          status: 'Active',
+          faceRegistered: false,
+          createdAt: serverTimestamp()
+        };
+        try {
+          await setDoc(doc(db, "students", sid), data);
+          closeModal();
+          await loadAllData();
+          renderStudentsTable();
+          populateFaceRegistrationDropdown();
+          showToast("Saved", `Student ${sid} enrolled in ${selectedClass}`, "success");
+        } catch (err) {
+          showToast("Error", err.message, "error");
+        }
+      };
+    };
+
+    window.openAddTeacherModal = function() {
+      const html = `
+        <h3 class="text-sm font-bold text-white mb-3">Add Faculty</h3>
+        <form id="addTeacherForm" class="space-y-3">
+          <div>
+            <label class="text-[11px] text-slate-400 block mb-1">Teacher ID *</label>
+            <input type="text" id="mTchId" required placeholder="TCH-NIT-102" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-white" />
+          </div>
+          <div>
+            <label class="text-[11px] text-slate-400 block mb-1">Full Name *</label>
+            <input type="text" id="mTchName" required placeholder="Faculty Name" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-white" />
+          </div>
+          <div>
+            <label class="text-[11px] text-slate-400 block mb-1">Email *</label>
+            <input type="email" id="mTchEmail" required placeholder="faculty@nit.ac.in" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-white" />
+          </div>
+          <button type="submit" class="w-full py-2.5 bg-brand-600 hover:bg-brand-500 rounded-xl text-white font-semibold text-xs mt-3">Save Teacher</button>
+        </form>
+      `;
+      openModal(html);
+
+      document.getElementById('addTeacherForm').onsubmit = async (e) => {
+        e.preventDefault();
+        const tid = document.getElementById('mTchId').value.trim();
+        const data = {
+          teacherId: tid,
+          fullName: document.getElementById('mTchName').value.trim(),
+          email: document.getElementById('mTchEmail').value.trim(),
+          status: 'Active',
+          approved: true,
+          faceRegistered: false,
+          createdAt: serverTimestamp()
+        };
+        try {
+          await setDoc(doc(db, "teachers", tid), data);
+          closeModal();
+          await loadAllData();
+          renderTeachersTable();
+          populateFaceRegistrationDropdown();
+          showToast("Saved", `Teacher ${tid} saved`, "success");
+        } catch (err) {
+          showToast("Error", err.message, "error");
+        }
+      };
+    };
+  </script>
+</body>
+</html>
