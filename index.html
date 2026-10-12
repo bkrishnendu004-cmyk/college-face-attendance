@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>NIT Attendance System | AI Biometrics</title>
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'sans-serif'] },
+          colors: {
+            brand: { 50: '#f5f7ff', 100: '#ebf0fe', 500: '#4338ca', 600: '#3730a3', 700: '#312e81' }
+          }
+        }
+      }
+    }
+  </script>
+
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <!-- Vladmandic Face-API Distribution -->
+  <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/dist/face-api.js"></script>
+
+  <style>
+    body { font-family: 'Inter', sans-serif; background-color: #090d16; color: #f1f5f9; }
+    .surface-card { background: #111827; border: 1px solid #1f2937; }
+    .surface-header { background: #0f172a; border-bottom: 1px solid #1e293b; }
+    .custom-scroll::-webkit-scrollbar { width: 5px; height: 5px; }
+    .custom-scroll::-webkit-scrollbar-track { background: #0f172a; }
+    .custom-scroll::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+    .video-viewport { position: relative; overflow: hidden; background: #020617; border-radius: 0.75rem; }
+    .video-viewport canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+    .scan-line {
+      position: absolute; left: 0; right: 0; height: 2px;
+      background: #10b981; box-shadow: 0 0 10px #10b981;
+      animation: scanAnim 2.5s ease-in-out infinite; pointer-events: none;
+    }
+    @keyframes scanAnim {
+      0% { top: 4%; opacity: 0.3; }
+      50% { top: 96%; opacity: 1; }
+      100% { top: 4%; opacity: 0.3; }
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col antialiased">
+
+  <div id="toastRegion" class="fixed top-4 right-4 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none"></div>
+
+  <!-- Global Modal Dialog -->
+  <div id="sysModalBackdrop" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs hidden items-center justify-center p-3 sm:p-4">
+    <div id="sysModalCard" class="surface-card w-full max-w-lg rounded-xl p-5 shadow-2xl relative max-h-[92vh] overflow-y-auto custom-scroll">
+      <button onclick="closeAppModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white">
+        <i class="fa-solid fa-xmark text-lg"></i>
+      </button>
+      <div id="sysModalBody"></div>
+    </div>
+  </div>
+
+  <!-- Navbar -->
+  <header class="surface-header sticky top-0 z-40">
+    <div class="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="h-8 w-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold text-sm">
+          <i class="fa-solid fa-expand"></i>
+        </div>
+        <div>
+          <span class="text-sm font-bold text-white tracking-tight">Narula Institute of Technology</span>
+          <span class="text-[10px] ml-2 px-1.5 py-0.5 rounded bg-indigo-900/60 text-indigo-300 border border-indigo-700/50">Biometric Attendance</span>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <div id="navUserBadge" class="hidden items-center gap-2 bg-slate-800/80 px-2.5 py-1 rounded-lg border border-slate-700">
+          <div class="h-6 w-6 rounded-full bg-indigo-600 flex items-center justify-center text-white font-bold text-xs" id="navAvatar">U</div>
+          <div class="text-left text-xs">
+            <span id="navName" class="font-semibold text-white truncate max-w-[120px] inline-block">User</span>
+            <span id="navRole" class="text-[10px] text-indigo-400 block -mt-1 font-mono uppercase">Role</span>
+          </div>
+          <button id="navSignOutBtn" title="Sign Out" class="text-slate-400 hover:text-red-400 pl-1.5 border-l border-slate-700">
+            <i class="fa-solid fa-right-from-bracket text-xs"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="flex-1 flex flex-col max-w-7xl w-full mx-auto p-4 sm:p-6">
+    
+    <!-- 1. AUTHENTICATION VIEW -->
+    <section id="viewAuth" class="flex-1 flex items-center justify-center py-8">
+      <div class="w-full max-w-md surface-card p-6 sm:p-8 rounded-xl shadow-xl">
+        <div class="text-center mb-6">
+          <div class="h-10 w-10 mx-auto rounded-xl bg-indigo-600/20 text-indigo-400 flex items-center justify-center text-lg mb-2">
+            <i class="fa-solid fa-shield-halved"></i>
+          </div>
+          <h1 class="text-lg font-bold text-white">System Authorization</h1>
+          <p class="text-xs text-slate-400 mt-1">Sign in with an institutional account</p>
+        </div>
+
+        <form id="authLoginForm" class="space-y-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">Email</label>
+            <input type="email" id="authEmail" required placeholder="faculty@nit.ac.in" 
+              class="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-xs sm:text-sm text-white focus:outline-none focus:border-indigo-500" />
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">Password</label>
+            <div class="relative">
+              <input type="password" id="authPassword" required placeholder="••••••••" 
+                class="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-xs sm:text-sm text-white focus:outline-none focus:border-indigo-500 pr-9" />
+              <button type="button" id="toggleAuthPassBtn" class="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 text-xs">
+                <i class="fa-solid fa-eye" id="toggleAuthPassIcon"></i>
+              </button>
+            </div>
+          </div>
+
+          <button type="submit" id="authSubmitBtn" 
+            class="w-full py-2.5 px-4 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs sm:text-sm shadow flex items-center justify-center gap-2">
+            <span id="authSubmitText">Sign In</span>
+            <i class="fa-solid fa-circle-notch fa-spin hidden" id="authSpinner"></i>
+          </button>
+        </form>
+
+        <div class="mt-6 pt-4 border-t border-slate-800 text-center">
+          <button id="quickInitBtn" type="button" class="text-xs px-3 py-1.5 bg-slate-800/80 hover:bg-slate-700 text-slate-300 rounded-md border border-slate-700 flex items-center justify-center gap-2 mx-auto">
+            <i class="fa-solid fa-database text-indigo-400"></i> Seed Sample Academic Baseline
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. DASHBOARD / MANAGEMENT VIEW (Admin, Teacher, Principal) -->
+    <section id="viewDashboard" class="hidden flex-col gap-4">
+      
+      <!-- Primary Navigation Tabs -->
+      <div class="flex items-center justify-between border-b border-slate-800 pb-2 overflow-x-auto custom-scroll">
+        <div class="flex gap-2 min-w-max" id="portalTabButtons">
+          <button onclick="navigateTab('classes')" class="tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 text-white" data-target="classes">
+            <i class="fa-solid fa-chalkboard mr-1"></i> Classes & Scanner
+          </button>
+          <button onclick="navigateTab('students')" class="tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-900 text-slate-400 hover:text-white" data-target="students">
+            <i class="fa-solid fa-user-graduate mr-1"></i> Student Directory
+          </button>
+          <button onclick="navigateTab('teachers')" class="tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-900 text-slate-400 hover:text-white" data-target="teachers">
+            <i class="fa-solid fa-user-tie mr-1"></i> Faculty Directory
+          </button>
+          <button onclick="navigateTab('biometric')" class="tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-900 text-slate-400 hover:text-white" data-target="biometric">
+            <i class="fa-solid fa-id-badge mr-1"></i> Biometric Enrollment
+          </button>
+          <button onclick="navigateTab('reports')" class="tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-900 text-slate-400 hover:text-white" data-target="reports">
+            <i class="fa-solid fa-chart-simple mr-1"></i> Attendance Records
+          </button>
+        </div>
+      </div>
+
+      <!-- Tab: Classes -->
+      <div id="tabContent-classes" class="tab-panel space-y-4">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-sm font-bold text-white">Active Course Modules</h2>
+            <p class="text-xs text-slate-400">Select a course module to launch the biometric camera session</p>
+          </div>
+          <button onclick="openClassCreationModal()" class="admin-only px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5">
+            <i class="fa-solid fa-plus"></i> Add Class
+          </button>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3" id="classModuleGrid"></div>
+      </div>
+
+      <!-- Tab: Students -->
+      <div id="tabContent-students" class="tab-panel hidden space-y-3">
+        <div class="flex items-center justify-between gap-3">
+          <input type="text" id="filterStudentInput" placeholder="Filter by name, ID or roll number..." 
+            class="w-full max-w-sm px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white" />
+          <button onclick="openStudentRegistrationModal()" class="admin-only px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 flex-shrink-0">
+            <i class="fa-solid fa-plus"></i> Register Student
+          </button>
+        </div>
+        <div class="surface-card rounded-lg border border-slate-800 overflow-x-auto">
+          <table class="w-full text-left text-xs">
+            <thead class="bg-slate-900 text-slate-400 uppercase tracking-wider border-b border-slate-800">
+              <tr>
+                <th class="p-2.5">Student ID</th>
+                <th class="p-2.5">Name</th>
+                <th class="p-2.5">Class / Section</th>
+                <th class="p-2.5">Roll No</th>
+                <th class="p-2.5">Biometric Status</th>
+                <th class="p-2.5 text-right admin-only">Action</th>
+              </tr>
+            </thead>
+            <tbody id="studentTableBody" class="divide-y divide-slate-800 text-slate-300">
+              <tr><td colspan="6" class="p-4 text-center text-slate-500">No students loaded.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Tab: Teachers -->
+      <div id="tabContent-teachers" class="tab-panel hidden space-y-3">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-sm font-bold text-white">Faculty Directory</h2>
+            <p class="text-xs text-slate-400">Institutional educators with designated session conduct privileges</p>
+          </div>
+          <button onclick="openTeacherRegistrationModal()" class="admin-only px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5">
+            <i class="fa-solid fa-plus"></i> Register Faculty
+          </button>
+        </div>
+        <div class="surface-card rounded-lg border border-slate-800 overflow-x-auto">
+          <table class="w-full text-left text-xs">
+            <thead class="bg-slate-900 text-slate-400 uppercase tracking-wider border-b border-slate-800">
+              <tr>
+                <th class="p-2.5">Teacher ID</th>
+                <th class="p-2.5">Full Name</th>
+                <th class="p-2.5">Institutional Email</th>
+                <th class="p-2.5">Face Registered</th>
+                <th class="p-2.5 text-right admin-only">Action</th>
+              </tr>
+            </thead>
+            <tbody id="teacherTableBody" class="divide-y divide-slate-800 text-slate-300">
+              <tr><td colspan="5" class="p-4 text-center text-slate-500">No faculty members registered.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Tab: Biometric Enrollment -->
+      <div id="tabContent-biometric" class="tab-panel hidden space-y-4">
+        <div class="surface-card p-5 rounded-xl">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+            <div>
+              <h2 class="text-sm font-bold text-white">Biometric Face Descriptor Enrollment</h2>
+              <p class="text-xs text-slate-400">Extract and store normalized 128D facial feature vectors</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <select id="bioTargetType" class="bg-slate-900 border border-slate-700 text-xs rounded-lg px-2.5 py-1.5 text-white">
+                <option value="student">Student</option>
+                <option value="teacher">Teacher</option>
+              </select>
+              <select id="bioTargetId" class="bg-slate-900 border border-slate-700 text-xs rounded-lg px-2.5 py-1.5 text-white max-w-[200px]">
+                <option value="">-- Choose Individual --</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="mt-4 grid grid-cols-1 md:grid-cols-12 gap-4">
+            <div class="md:col-span-7 flex flex-col items-center">
+              <div class="video-viewport w-full aspect-video border border-slate-800 flex items-center justify-center">
+                <video id="bioRegVideo" autoplay playsinline muted class="w-full h-full object-cover"></video>
+                <canvas id="bioRegCanvas"></canvas>
+                <div id="bioRegScanLine" class="scan-line hidden"></div>
+                <div id="bioCameraPlaceholder" class="absolute inset-0 flex flex-col items-center justify-center bg-slate-950 p-4 text-center">
+                  <i class="fa-solid fa-camera text-2xl text-slate-600 mb-2"></i>
+                  <span class="text-xs text-slate-400">Camera Offline</span>
+                </div>
+              </div>
+              <div class="flex flex-wrap gap-2 mt-3 w-full justify-center">
+                <button id="btnStartBioCam" class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1.5">
+                  <i class="fa-solid fa-play"></i> Turn On Camera
+                </button>
+                <button id="btnCaptureBioSample" disabled class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-800 text-white text-xs font-semibold">
+                  Capture Sample (<span id="bioSampleProgress">0/3</span>)
+                </button>
+                <button id="btnStopBioCam" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs">
+                  Stop
+                </button>
+              </div>
+            </div>
+
+            <div class="md:col-span-5 space-y-3">
+              <div class="bg-slate-900/90 p-3.5 rounded-lg border border-slate-800 text-xs space-y-1.5" id="bioTargetDetails">
+                <p class="text-slate-500 italic">No person selected for enrollment.</p>
+              </div>
+              <div class="bg-slate-900/90 p-3.5 rounded-lg border border-slate-800">
+                <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-2">Samples Captured (Frontal Alignment)</span>
+                <div class="grid grid-cols-3 gap-2" id="bioSampleThumbnails">
+                  <div class="h-14 bg-slate-950 border border-dashed border-slate-800 rounded flex items-center justify-center text-[10px] text-slate-600">Sample 1</div>
+                  <div class="h-14 bg-slate-950 border border-dashed border-slate-800 rounded flex items-center justify-center text-[10px] text-slate-600">Sample 2</div>
+                  <div class="h-14 bg-slate-950 border border-dashed border-slate-800 rounded flex items-center justify-center text-[10px] text-slate-600">Sample 3</div>
+                </div>
+                <button id="btnPersistBiometric" disabled class="w-full mt-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 text-white text-xs font-semibold">
+                  Persist Biometrics to Database
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab: Reports -->
+      <div id="tabContent-reports" class="tab-panel hidden space-y-3">
+        <div class="flex items-center justify-between">
+          <h2 class="text-sm font-bold text-white">Class Attendance History</h2>
+          <button onclick="exportAttendanceCSV()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-semibold flex items-center gap-1.5 border border-slate-700">
+            <i class="fa-solid fa-download"></i> Export Records (CSV)
+          </button>
+        </div>
+        <div class="surface-card rounded-lg border border-slate-800 overflow-x-auto">
+          <table class="w-full text-left text-xs">
+            <thead class="bg-slate-900 text-slate-400 uppercase tracking-wider border-b border-slate-800">
+              <tr>
+                <th class="p-2.5">Session Date / Time</th>
+                <th class="p-2.5">Course Class</th>
+                <th class="p-2.5">Room</th>
+                <th class="p-2.5">Instructor</th>
+                <th class="p-2.5">Turnout</th>
+                <th class="p-2.5 text-right">Roster</th>
+              </tr>
+            </thead>
+            <tbody id="sessionHistoryTableBody" class="divide-y divide-slate-800 text-slate-300">
+              <tr><td colspan="6" class="p-4 text-center text-slate-500">No attendance sessions saved yet.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. LIVE ATTENDANCE SCANNER VIEW -->
+    <section id="viewScanner" class="hidden flex-col gap-4">
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+        
+        <!-- Camera Column -->
+        <div class="lg:col-span-7 surface-card p-4 rounded-xl flex flex-col items-center">
+          <div class="w-full flex items-center justify-between mb-2 text-xs">
+            <div class="flex items-center gap-2">
+              <span class="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span class="font-bold text-white" id="scannerRoomBadge">Room 422</span>
+              <span class="text-slate-600">•</span>
+              <span class="text-slate-300 truncate max-w-[180px]" id="scannerClassBadge">Module</span>
+            </div>
+            <span id="scannerStatusBadge" class="text-[10px] px-2 py-0.5 rounded bg-indigo-900/60 text-indigo-300 border border-indigo-700/50 font-mono">
+              Threshold: 0.52
+            </span>
+          </div>
+
+          <div class="video-viewport w-full aspect-video border border-slate-800 flex items-center justify-center">
+            <video id="scannerVideo" autoplay playsinline muted class="w-full h-full object-cover"></video>
+            <canvas id="scannerCanvas"></canvas>
+            <div class="scan-line"></div>
+          </div>
+
+          <div class="w-full mt-2.5 p-2 bg-slate-900 rounded-lg border border-slate-800 flex items-center justify-between text-xs">
+            <div id="scannerFeedback" class="text-slate-300 truncate">
+              Align faces within the viewfinder.
+            </div>
+            <div id="scannerFpsMeter" class="text-slate-500 text-[10px] font-mono">30 FPS</div>
+          </div>
+
+          <div class="w-full mt-3 flex justify-between gap-2">
+            <button onclick="terminateScannerSession()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-semibold">
+              <i class="fa-solid fa-arrow-left mr-1"></i> Exit Session
+            </button>
+            <button id="btnFinalizeAttendance" class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow">
+              <i class="fa-solid fa-check-double"></i> Finalize & Record Session
+            </button>
+          </div>
+        </div>
+
+        <!-- Recognition Telemetry & Live Roster -->
+        <div class="lg:col-span-5 flex flex-col gap-4">
+          
+          <!-- Immediate Identity Match Card -->
+          <div class="surface-card p-4 rounded-xl border border-slate-800">
+            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center justify-between">
+              <span>Instant Match Telemetry</span>
+              <span id="matchTelemetryStatus" class="text-slate-500">Standby</span>
+            </div>
+            <div id="activeMatchContainer" class="min-h-[105px] flex items-center justify-center text-center p-2">
+              <div class="text-slate-500 text-xs">
+                <i class="fa-solid fa-id-card text-2xl text-slate-600 block mb-1"></i>
+                No face matched in current frame.
+              </div>
+            </div>
+          </div>
+
+          <!-- Present Student Roster -->
+          <div class="surface-card p-4 rounded-xl flex-1 flex flex-col h-[280px]">
+            <div class="flex items-center justify-between pb-2 border-b border-slate-800">
+              <div>
+                <h3 class="text-xs font-bold text-white">Live Attendance Roll</h3>
+                <span class="text-[10px] text-slate-400" id="sessionEnrolledRatio">Enrolled: 0</span>
+              </div>
+              <div class="text-right">
+                <span class="text-base font-extrabold text-emerald-400" id="livePresentCounter">0</span>
+                <span class="text-[10px] text-slate-400 block -mt-1">Present</span>
+              </div>
+            </div>
+            <div id="liveRosterContainer" class="flex-1 overflow-y-auto custom-scroll space-y-1.5 mt-2 pr-1">
+              <div class="h-full flex items-center justify-center text-xs text-slate-500">
+                Awaiting student biometric verification...
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ES Module Application Core -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
+    import { 
+      getAuth, 
+      signInWithEmailAndPassword, 
+      signOut, 
+      onAuthStateChanged
+    } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js";
+    import { 
+      getFirestore, 
+      collection, 
+      doc, 
+      getDoc, 
+      getDocs, 
+      setDoc, 
+      updateDoc, 
+      deleteDoc,
+      serverTimestamp
+    } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyCrU6fJwkfvWsiSkeQ-MXkvTagADO_8eyk",
+      authDomain: "face-attendance-system-2f0b5.firebaseapp.com",
+      projectId: "face-attendance-system-2f0b5",
+      storageBucket: "face-attendance-system-2f0b5.firebasestorage.app",
+      messagingSenderId: "577511962862",
+      appId: "1:577511962862:web:8422d6bf7a1d85c9fb9bff",
+      measurementId: "G-3DS0THZGLB"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    // Global Architectural State Container
+    window.SYS = {
+      currentUser: null,
+      currentUserProfile: null,
+      role: null, // Admin, Teacher, Principal
+      modelsReady: false,
+      students: [],
+      teachers: [],
+      classes: [],
+      sessions: [],
+      bioStream: null,
+      bioSamples: [],
+      scannerStream: null,
+      scannerLoopActive: false,
+      isDetecting: false,
+      activeSession: null,
+      sessionAttendance: new Map(), // studentId -> { timestamp, distance, record }
+      RECOGNITION_THRESHOLD: 0.52 // Strict Euclidean threshold
+    };
+
+    // UI Toast System
+    window.notify = function(title, text, type = 'info') {
+      const region = document.getElementById('toastRegion');
+      const styles = {
+        success: 'border-emerald-600 bg-emerald-950/90 text-emerald-200',
+        error: 'border-red-600 bg-red-950/90 text-red-200',
+        info: 'border-indigo-600 bg-indigo-950/90 text-indigo-200',
+        warning: 'border-amber-600 bg-amber-950/90 text-amber-200'
+      };
+      const toast = document.createElement('div');
+      toast.className = `p-3 rounded-lg border shadow-lg flex items-start gap-2.5 backdrop-blur-xs text-xs ${styles[type] || styles.info}`;
+      toast.innerHTML = `
+        <div class="flex-1">
+          <div class="font-bold text-white">${title}</div>
+          <div class="mt-0.5 opacity-90">${text}</div>
+        </div>
+      `;
+      region.appendChild(toast);
+      setTimeout(() => toast.remove(), 4000);
+    };
+
+    window.openAppModal = function(html) {
+      document.getElementById('sysModalBody').innerHTML = html;
+      document.getElementById('sysModalBackdrop').classList.remove('hidden');
+      document.getElementById('sysModalBackdrop').classList.add('flex');
+    };
+
+    window.closeAppModal = function() {
+      document.getElementById('sysModalBackdrop').classList.add('hidden');
+      document.getElementById('sysModalBackdrop').classList.remove('flex');
+      document.getElementById('sysModalBody').innerHTML = '';
+    };
+
+    // Face-API Initialization Routine
+    async function loadVisionModels() {
+      if (window.SYS.modelsReady) return true;
+      try {
+        const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
+        await Promise.all([
+          faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+          faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+          faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
+        ]);
+        window.SYS.modelsReady = true;
+        return true;
+      } catch (err) {
+        console.error("AI Weights load failure:", err);
+        notify("Computer Vision Error", "Failed to retrieve neural models from CDN.", "error");
+        return false;
+      }
+    }
+
+    // Mathematical Normalization & Distance Metrics
+    function l2Normalize(vector) {
+      let sum = 0;
+      for (let i = 0; i < vector.length; i++) sum += vector[i] * vector[i];
+      const norm = Math.sqrt(sum);
+      if (norm === 0) return vector;
+      return vector.map(v => v / norm);
+    }
+
+    function computeEuclideanDistance(v1, v2) {
+      if (!v1 || !v2 || v1.length !== v2.length) return 1.0;
+      let sum = 0;
+      for (let i = 0; i < v1.length; i++) {
+        const diff = v1[i] - v2[i];
+        sum += diff * diff;
+      }
+      return Math.sqrt(sum);
+    }
+
+    // Authentication State Observer
+    onAuthStateChanged(auth, async (user) => {
+      const vAuth = document.getElementById('viewAuth');
+      const vDash = document.getElementById('viewDashboard');
+      const vScan = document.getElementById('viewScanner');
+      const navBadge = document.getElementById('navUserBadge');
+
+      if (user) {
+        window.SYS.currentUser = user;
+        let profile = null;
+        try {
+          const userSnap = await getDoc(doc(db, "users", user.uid));
+          if (userSnap.exists()) {
+            profile = userSnap.data();
+          } else {
+            // Unregistered accounts receive lowest default role until granted by administrator
+            profile = {
+              uid: user.uid,
+              email: user.email,
+              name: user.email.split('@')[0],
+              role: 'Teacher',
+              authorized: true
+            };
+            await setDoc(doc(db, "users", user.uid), profile);
+          }
+        } catch (e) {
+          profile = { uid: user.uid, email: user.email, name: user.email.split('@')[0], role: 'Teacher' };
+        }
+
+        window.SYS.currentUserProfile = profile;
+        window.SYS.role = profile.role || 'Teacher';
+
+        navBadge.classList.remove('hidden');
+        navBadge.classList.add('flex');
+        document.getElementById('navName').innerText = profile.name || user.email;
+        document.getElementById('navRole').innerText = window.SYS.role;
+        document.getElementById('navAvatar').innerText = (profile.name || user.email).charAt(0).toUpperCase();
+
+        vAuth.classList.add('hidden');
+        vDash.classList.remove('hidden');
+        vDash.classList.add('flex');
+        vScan.classList.add('hidden');
+
+        // Apply Role Visibility
+        if (window.SYS.role !== 'Admin') {
+          document.querySelectorAll('.admin-only').forEach(el => el.classList.add('hidden'));
+        }
+
+        await fetchAllDatabaseEntities();
+        renderClassModules();
+        loadVisionModels();
+      } else {
+        window.SYS.currentUser = null;
+        window.SYS.role = null;
+        navBadge.classList.add('hidden');
+        vAuth.classList.remove('hidden');
+        vDash.classList.add('hidden');
+        vScan.classList.add('hidden');
+      }
+    });
+
+    async function fetchAllDatabaseEntities() {
+      try {
+        const [studSnap, tchSnap, clsSnap, sesSnap] = await Promise.all([
+          getDocs(collection(db, "students")),
+          getDocs(collection(db, "teachers")),
+          getDocs(collection(db, "classes")),
+          getDocs(collection(db, "attendanceSessions"))
+        ]);
+
+        window.SYS.students = studSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        window.SYS.teachers = tchSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        window.SYS.classes = clsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        window.SYS.sessions = sesSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+          .sort((a,b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+
+      } catch (err) {
+        console.error("Entity fetch fault:", err);
+        notify("Firestore Sync", "Could not synchronize academic data tables.", "error");
+      }
+    }
+
+    // Authentication Forms
+    document.getElementById('authLoginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const em = document.getElementById('authEmail').value.trim();
+      const pw = document.getElementById('authPassword').value;
+      const btn = document.getElementById('authSubmitBtn');
+      const sp = document.getElementById('authSpinner');
+      const txt = document.getElementById('authSubmitText');
+
+      btn.disabled = true;
+      sp.classList.remove('hidden');
+      txt.innerText = "Authenticating...";
+
+      try {
+        await signInWithEmailAndPassword(auth, em, pw);
+        notify("Access Granted", "Identity verified successfully", "success");
+      } catch (err) {
+        notify("Authorization Failed", err.message, "error");
+      } finally {
+        btn.disabled = false;
+        sp.classList.add('hidden');
+        txt.innerText = "Sign In";
+      }
+    });
+
+    document.getElementById('toggleAuthPassBtn').addEventListener('click', () => {
+      const field = document.getElementById('authPassword');
+      const icon = document.getElementById('toggleAuthPassIcon');
+      if (field.type === 'password') {
+        field.type = 'text';
+        icon.className = 'fa-solid fa-eye-slash';
+      } else {
+        field.type = 'password';
+        icon.className = 'fa-solid fa-eye';
+      }
+    });
+
+    document.getElementById('navSignOutBtn').addEventListener('click', () => {
+      stopBiometricCapture();
+      terminateScannerSession();
+      signOut(auth);
+    });
+
+    // Sample Academic Data Seeding
+    document.getElementById('quickInitBtn').addEventListener('click', async () => {
+      const demoClasses = [
+        { classId: "CSE-301", className: "Distributed Systems & Cloud", department: "Computer Science & Engineering", semester: "5th Sem", assignedTeacherId: "TCH-NIT-101", room: "Room 422" },
+        { classId: "ECE-201", className: "Digital Signal Processing", department: "Electronics & Communication", semester: "3rd Sem", assignedTeacherId: "TCH-NIT-102", room: "Room 425" }
+      ];
+      const demoStudents = [
+        { studentId: "NIT-CSE-24-001", fullName: "Aarav Sharma", classId: "CSE-301", rollNo: "01", department: "CSE", semester: "5th Sem", faceRegistered: false },
+        { studentId: "NIT-CSE-24-002", fullName: "Riya Sen", classId: "CSE-301", rollNo: "02", department: "CSE", semester: "5th Sem", faceRegistered: false },
+        { studentId: "NIT-ECE-24-010", fullName: "Kunal Ghosh", classId: "ECE-201", rollNo: "10", department: "ECE", semester: "3rd Sem", faceRegistered: false }
+      ];
+      const demoTeachers = [
+        { teacherId: "TCH-NIT-101", fullName: "Dr. S. Mukherjee", email: "faculty@nit.ac.in", department: "CSE", faceRegistered: false, authorized: true }
+      ];
+
+      try {
+        for (const c of demoClasses) await setDoc(doc(db, "classes", c.classId), c);
+        for (const s of demoStudents) await setDoc(doc(db, "students", s.studentId), s);
+        for (const t of demoTeachers) await setDoc(doc(db, "teachers", t.teacherId), t);
+        notify("Baseline Configured", "Sample courses and roster records initialized.", "success");
+        await fetchAllDatabaseEntities();
+        renderClassModules();
+      } catch (err) {
+        notify("Init Error", err.message, "error");
+      }
+    });
+
+    // Tab Navigation
+    window.navigateTab = function(tabId) {
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        if (btn.dataset.target === tabId) {
+          btn.className = "tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 text-white";
+        } else {
+          btn.className = "tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-900 text-slate-400 hover:text-white";
+        }
+      });
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
+      const active = document.getElementById(`tabContent-${tabId}`);
+      if (active) active.classList.remove('hidden');
+
+      if (tabId === 'classes') renderClassModules();
+      if (tabId === 'students') renderStudentsTable();
+      if (tabId === 'teachers') renderTeachersTable();
+      if (tabId === 'biometric') populateBiometricTargets();
+      if (tabId === 'reports') renderSessionHistoryTable();
+    };
+
+    // Render Classes Tab
+    function renderClassModules() {
+      const container = document.getElementById('classModuleGrid');
+      const classes = window.SYS.classes;
+      if (classes.length === 0) {
+        container.innerHTML = `<div class="col-span-full p-6 text-center text-slate-500 surface-card rounded-xl">No active courses. Add one via "+ Add Class".</div>`;
+        return;
+      }
+
+      container.innerHTML = classes.map(c => {
+        const enrolled = window.SYS.students.filter(s => s.classId === c.classId).length;
+        return `
+          <div class="surface-card p-4 rounded-xl border border-slate-800 hover:border-indigo-500 transition cursor-pointer flex flex-col justify-between" onclick="inspectClassSessionLaunch('${c.classId}')">
+            <div>
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-[10px] px-2 py-0.5 rounded bg-indigo-950 text-indigo-300 border border-indigo-800 font-mono">${c.classId}</span>
+                <span class="text-[11px] text-slate-400">${c.room || 'Room 422'}</span>
+              </div>
+              <h3 class="text-xs font-bold text-white mb-1">${c.className}</h3>
+              <p class="text-[11px] text-slate-400">${c.department || 'Academic Department'}</p>
+            </div>
+            <div class="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-[11px]">
+              <span class="text-slate-400">${enrolled} Enrolled</span>
+              <span class="text-emerald-400 font-semibold flex items-center gap-1">Launch Scanner <i class="fa-solid fa-arrow-right text-[10px]"></i></span>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // Modal: Launch Verification (Teacher Facial Verification Requirement)
+    window.inspectClassSessionLaunch = function(classId) {
+      const target = window.SYS.classes.find(c => c.classId === classId);
+      if (!target) return;
+
+      const html = `
+        <div class="text-center pb-3 border-b border-slate-800">
+          <h3 class="text-sm font-bold text-white">${target.className} (${target.classId})</h3>
+          <p class="text-xs text-slate-400 mt-0.5">Faculty authorization is required to initiate live attendance.</p>
+        </div>
+        <div class="py-4 space-y-3">
+          <div class="p-3 bg-slate-900 border border-slate-800 rounded-lg text-xs space-y-1">
+            <div class="text-slate-400">Assigned Instructor: <span class="text-white font-semibold">${target.assignedTeacherId || 'Faculty'}</span></div>
+            <div class="text-slate-400">Designated Hall: <span class="text-white font-semibold">${target.room || 'Room 422'}</span></div>
+          </div>
+          <p class="text-[11px] text-slate-400">
+            Note: Attendance scanning will verify registered students against this class roster.
+          </p>
+        </div>
+        <div class="flex gap-2">
+          <button onclick="closeAppModal()" class="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-semibold">Cancel</button>
+          <button onclick="launchAttendanceScanner('${classId}')" class="flex-1 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold">
+            Start Scanning
+          </button>
+        </div>
+      `;
+      openAppModal(html);
+    };
+
+    // Live Attendance Scanner Initialization
+    window.launchAttendanceScanner = async function(classId) {
+      closeAppModal();
+      const cls = window.SYS.classes.find(c => c.classId === classId);
+      if (!cls) return;
+
+      const enrolled = window.SYS.students.filter(s => s.classId === classId);
+      const enrolledWithBio = enrolled.filter(s => s.faceRegistered && Array.isArray(s.faceDescriptor));
+
+      window.SYS.activeSession = {
+        classId: cls.classId,
+        className: cls.className,
+        room: cls.room || 'Room 422',
+        instructorId: cls.assignedTeacherId || 'TCH-NIT-101',
+        startTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        date: new Date().toISOString().split('T')[0],
+        enrolled: enrolled,
+        enrolledWithBio: enrolledWithBio,
+        sessionId: `SES_${cls.classId}_${Date.now()}`
+      };
+
+      window.SYS.sessionAttendance.clear();
+
+      // UI Route switch
+      document.getElementById('viewDashboard').classList.add('hidden');
+      document.getElementById('viewScanner').classList.remove('hidden');
+      document.getElementById('viewScanner').classList.add('flex');
+
+      document.getElementById('scannerClassBadge').innerText = cls.className;
+      document.getElementById('scannerRoomBadge').innerText = cls.room || 'Room 422';
+      document.getElementById('sessionEnrolledRatio').innerText = `Enrolled: ${enrolled.length} (${enrolledWithBio.length} Biometric)`;
+      document.getElementById('livePresentCounter').innerText = '0';
+      document.getElementById('liveRosterContainer').innerHTML = `<div class="h-full flex items-center justify-center text-xs text-slate-500">Awaiting student biometric verification...</div>`;
+
+      await startScannerStream();
+    };
+
+    async function startScannerStream() {
+      await loadVisionModels();
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: 640, height: 480, facingMode: 'user' }
+        });
+        window.SYS.scannerStream = stream
