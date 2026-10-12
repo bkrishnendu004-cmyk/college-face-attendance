@@ -1,0 +1,1738 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>College AI Face Recognition Attendance Management System</title>
+  
+  <!-- Inter Font -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'sans-serif'] },
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              500: '#4f46e5',
+              600: '#4338ca',
+              700: '#3730a3',
+              800: '#312e81',
+              900: '#1e1b4b',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Font Awesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <!-- EmailJS SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+  <!-- Face API.js -->
+  <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
+
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #0b0f19;
+      color: #f3f4f6;
+    }
+    select, input, textarea {
+      background-color: #111827 !important;
+      color: #ffffff !important;
+    }
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.6); }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(99, 102, 241, 0.4); border-radius: 9999px; }
+    .glass-panel {
+      background: rgba(17, 24, 39, 0.95);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .pulse-scan {
+      position: absolute;
+      left: 0; right: 0; height: 3px;
+      background: linear-gradient(90deg, transparent, #10b981, #38bdf8, transparent);
+      box-shadow: 0 0 15px #10b981;
+      animation: scan 2.2s ease-in-out infinite;
+    }
+    @keyframes scan {
+      0% { top: 4%; opacity: 0.2; }
+      50% { top: 92%; opacity: 1; }
+      100% { top: 4%; opacity: 0.2; }
+    }
+    .video-canvas-container {
+      position: relative;
+      display: inline-block;
+      overflow: hidden;
+      border-radius: 1rem;
+    }
+    .video-canvas-container canvas {
+      position: absolute;
+      top: 0; left: 0;
+      pointer-events: none;
+    }
+    @keyframes slideUp {
+      from { transform: translateY(15px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+    .name-popup-anim { animation: slideUp 0.25s ease-out forwards; }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col antialiased selection:bg-brand-500 selection:text-white">
+
+  <!-- Toast Notification Hub -->
+  <div id="toastContainer" class="fixed top-4 right-4 z-50 flex flex-col gap-2 max-w-xs sm:max-w-sm w-full pointer-events-none"></div>
+
+  <!-- Global Modal Dialog -->
+  <div id="globalModalBackdrop" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden items-center justify-center p-3 sm:p-4">
+    <div id="globalModalCard" class="glass-panel w-full max-w-lg rounded-2xl p-5 sm:p-6 border border-slate-700 shadow-2xl relative max-h-[90vh] overflow-y-auto custom-scrollbar">
+      <button onclick="window.closeModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white text-lg">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+      <div id="modalContent"></div>
+    </div>
+  </div>
+
+  <!-- Top Navigation Header -->
+  <header class="glass-panel sticky top-0 z-40 border-b border-slate-800">
+    <div class="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-2.5 sm:py-0 sm:h-16 flex items-center justify-between gap-2">
+      <div class="flex items-center gap-2.5 min-w-0">
+        <div class="h-9 w-9 sm:h-10 sm:w-10 flex-shrink-0 rounded-xl bg-gradient-to-tr from-brand-600 to-indigo-400 flex items-center justify-center text-white shadow-lg shadow-brand-500/20">
+          <i class="fa-solid fa-camera-rotate text-base sm:text-lg"></i>
+        </div>
+        <div class="min-w-0">
+          <div class="flex flex-wrap items-center gap-1.5">
+            <span class="text-sm sm:text-base font-bold tracking-tight text-white truncate">College Attendance System</span>
+            <span class="text-[10px] px-1.5 py-0.5 rounded bg-brand-500/20 text-brand-300 font-semibold border border-brand-500/30">AI Biometric</span>
+          </div>
+          <p class="text-[11px] text-slate-400 truncate hidden xs:block">Verified Facial Recognition Ledger</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2 flex-shrink-0">
+        <div id="navUserBadge" class="hidden items-center gap-2 bg-slate-800/80 px-2.5 py-1 rounded-xl border border-slate-700">
+          <div class="h-7 w-7 rounded-full bg-brand-600 flex items-center justify-center text-white font-semibold text-xs" id="navUserAvatar">U</div>
+          <div class="text-left hidden sm:block">
+            <div id="navUserName" class="text-xs font-semibold text-white max-w-[120px] truncate">User</div>
+            <div id="navUserRole" class="text-[9px] uppercase font-bold text-brand-400">Role</div>
+          </div>
+          <button id="logoutBtn" title="Sign Out" class="text-slate-400 hover:text-red-400 p-1 ml-1">
+            <i class="fa-solid fa-arrow-right-from-bracket text-xs"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="flex-1 flex flex-col max-w-7xl w-full mx-auto p-3 sm:p-6 lg:p-8">
+    
+    <!-- 1. AUTHENTICATION SECTION -->
+    <section id="loginSection" class="flex-1 flex items-center justify-center py-6 sm:py-10">
+      <div class="w-full max-w-md glass-panel p-6 sm:p-8 rounded-3xl border border-slate-800 shadow-2xl relative">
+        <div class="text-center mb-6">
+          <div class="inline-flex h-12 w-12 rounded-2xl bg-brand-600/20 border border-brand-500/30 items-center justify-center text-brand-400 text-xl mb-2">
+            <i class="fa-solid fa-fingerprint"></i>
+          </div>
+          <h2 class="text-xl sm:text-2xl font-bold text-white">System Portal Access</h2>
+          <p class="text-xs text-slate-400 mt-1">Sign in with authorized institutional credentials</p>
+        </div>
+
+        <form id="loginForm" class="space-y-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">Email</label>
+            <div class="relative">
+              <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-500 text-xs">
+                <i class="fa-solid fa-envelope"></i>
+              </span>
+              <input type="email" id="loginEmail" required placeholder="user@college.edu" 
+                class="w-full pl-9 pr-3 py-2.5 border border-slate-700 rounded-xl text-xs sm:text-sm text-white focus:outline-none focus:border-brand-500" />
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">Password</label>
+            <div class="relative">
+              <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-500 text-xs">
+                <i class="fa-solid fa-lock"></i>
+              </span>
+              <input type="password" id="loginPassword" required placeholder="••••••••" 
+                class="w-full pl-9 pr-9 py-2.5 border border-slate-700 rounded-xl text-xs sm:text-sm text-white focus:outline-none focus:border-brand-500" />
+              <button type="button" id="togglePasswordBtn" class="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 text-xs">
+                <i class="fa-solid fa-eye" id="togglePasswordIcon"></i>
+              </button>
+            </div>
+          </div>
+
+          <button type="submit" id="loginSubmitBtn" 
+            class="w-full py-2.5 px-4 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-semibold text-xs sm:text-sm shadow-lg flex items-center justify-center gap-2">
+            <span id="loginBtnText">Sign In to Dashboard</span>
+            <i class="fa-solid fa-circle-notch fa-spin hidden" id="loginSpinner"></i>
+          </button>
+        </form>
+
+        <div class="mt-4 text-center">
+          <p class="text-[11px] text-slate-500">Unregistered users must contact the Department Administrator for account provisioning.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. ADMIN DASHBOARD -->
+    <section id="adminView" class="hidden flex-col gap-5">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3 overflow-x-auto custom-scrollbar">
+        <div class="flex gap-2 min-w-max">
+          <button onclick="window.switchAdminTab('classes')" class="admin-tab-btn active px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-brand-600 text-white" data-tab="classes">
+            <i class="fa-solid fa-layer-group mr-1"></i> Classes
+          </button>
+          <button onclick="window.switchAdminTab('students')" class="admin-tab-btn px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-900 text-slate-400 hover:text-white" data-tab="students">
+            <i class="fa-solid fa-user-graduate mr-1"></i> Students
+          </button>
+          <button onclick="window.switchAdminTab('teachers')" class="admin-tab-btn px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-900 text-slate-400 hover:text-white" data-tab="teachers">
+            <i class="fa-solid fa-chalkboard-user mr-1"></i> Teachers
+          </button>
+          <button onclick="window.switchAdminTab('faceRegistration')" class="admin-tab-btn px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-900 text-slate-400 hover:text-white" data-tab="faceRegistration">
+            <i class="fa-solid fa-camera mr-1"></i> Face Enrollment
+          </button>
+          <button onclick="window.switchAdminTab('reports')" class="admin-tab-btn px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-900 text-slate-400 hover:text-white" data-tab="reports">
+            <i class="fa-solid fa-chart-line mr-1"></i> Attendance Logs
+          </button>
+        </div>
+      </div>
+
+      <!-- Admin: Classes Tab -->
+      <div id="adminTab-classes" class="admin-tab-content space-y-4">
+        <div class="flex items-center justify-between gap-2">
+          <div>
+            <h3 class="text-sm font-bold text-white">Academic Classes Directory</h3>
+            <p class="text-[11px] text-slate-400">Manage curriculum sections and assigned teachers</p>
+          </div>
+          <button onclick="window.openAddClassModal()" class="px-3 py-1.5 bg-brand-600 hover:bg-brand-500 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5">
+            <i class="fa-solid fa-plus"></i> Add Class
+          </button>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3" id="adminClassCardsContainer"></div>
+      </div>
+
+      <!-- Admin: Students Tab -->
+      <div id="adminTab-students" class="admin-tab-content hidden space-y-4">
+        <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+          <input type="text" id="studentSearchInput" placeholder="Filter by Name, ID, or Roll..." 
+            class="px-3 py-1.5 border border-slate-700 rounded-xl text-xs text-white max-w-sm" />
+          <button onclick="window.openAddStudentModal()" class="px-3 py-1.5 bg-brand-600 hover:bg-brand-500 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 justify-center">
+            <i class="fa-solid fa-user-plus"></i> Add Student
+          </button>
+        </div>
+        <div class="glass-panel rounded-xl border border-slate-800 overflow-x-auto">
+          <table class="w-full text-left text-xs">
+            <thead class="bg-slate-900 text-slate-400 uppercase tracking-wider border-b border-slate-800">
+              <tr>
+                <th class="p-2.5">Student ID</th>
+                <th class="p-2.5">Name</th>
+                <th class="p-2.5">Class</th>
+                <th class="p-2.5">Roll</th>
+                <th class="p-2.5">Face Registered</th>
+                <th class="p-2.5 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="studentTableBody" class="divide-y divide-slate-800 text-slate-300"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Admin: Teachers Tab -->
+      <div id="adminTab-teachers" class="admin-tab-content hidden space-y-4">
+        <div class="flex items-center justify-between">
+          <div>
+            <h3 class="text-sm font-bold text-white">Faculty Members</h3>
+            <p class="text-[11px] text-slate-400">Authorize teacher accounts and assigned classes</p>
+          </div>
+          <button onclick="window.openAddTeacherModal()" class="px-3 py-1.5 bg-brand-600 hover:bg-brand-500 text-white rounded-xl text-xs font-semibold">
+            <i class="fa-solid fa-user-plus mr-1"></i> Add Faculty
+          </button>
+        </div>
+        <div class="glass-panel rounded-xl border border-slate-800 overflow-x-auto">
+          <table class="w-full text-left text-xs">
+            <thead class="bg-slate-900 text-slate-400 uppercase tracking-wider border-b border-slate-800">
+              <tr>
+                <th class="p-2.5">Teacher ID</th>
+                <th class="p-2.5">Name</th>
+                <th class="p-2.5">Email</th>
+                <th class="p-2.5">Face Status</th>
+                <th class="p-2.5 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="teacherTableBody" class="divide-y divide-slate-800 text-slate-300"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Admin: Face Enrollment Tab -->
+      <div id="adminTab-faceRegistration" class="admin-tab-content hidden space-y-4">
+        <div class="glass-panel p-5 rounded-2xl border border-slate-800">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+            <div>
+              <h3 class="text-sm font-bold text-white">Biometric Face Enrollment</h3>
+              <p class="text-xs text-slate-400">Capture 3 descriptors to compute facial embedding vector</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <select id="regTypeSelect" class="border border-slate-700 text-xs rounded-xl px-3 py-2 text-white">
+                <option value="student">Student</option>
+                <option value="teacher">Teacher</option>
+              </select>
+              <select id="registerEntitySelect" class="border border-slate-700 text-xs rounded-xl px-3 py-2 text-white max-w-xs">
+                <option value="">-- Select Candidate --</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="mt-4 grid grid-cols-1 md:grid-cols-12 gap-4">
+            <div class="md:col-span-7 flex flex-col items-center">
+              <div class="video-canvas-container bg-black border border-slate-800 w-full aspect-video rounded-xl flex items-center justify-center relative">
+                <video id="regVideo" autoplay playsinline muted class="w-full h-full object-cover"></video>
+                <canvas id="regCanvas"></canvas>
+                <div id="regScanOverlay" class="pulse-scan hidden"></div>
+                <div id="regCameraPlaceholder" class="absolute inset-0 flex flex-col items-center justify-center bg-slate-950 p-4 text-center">
+                  <i class="fa-solid fa-video-slash text-2xl text-slate-600 mb-2"></i>
+                  <span class="text-xs text-slate-400">Webcam Inactive</span>
+                </div>
+              </div>
+              <div class="flex flex-wrap gap-2 mt-3 w-full justify-center">
+                <button id="startRegCamBtn" class="px-3 py-2 rounded-xl bg-brand-600 hover:bg-brand-500 text-white text-xs font-semibold flex items-center gap-1.5">
+                  <i class="fa-solid fa-camera"></i> Start Camera
+                </button>
+                <button id="captureFaceBtn" disabled class="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-800 disabled:text-slate-500 text-white text-xs font-semibold">
+                  Capture (<span id="sampleCountText">0/3</span>)
+                </button>
+                <button id="stopRegCamBtn" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs">
+                  Stop
+                </button>
+              </div>
+            </div>
+
+            <div class="md:col-span-5 space-y-3">
+              <div class="bg-slate-900/80 p-4 rounded-xl border border-slate-800 text-xs space-y-2" id="regSelectedDetails">
+                <p class="text-slate-500 italic">Select a candidate from the dropdown above.</p>
+              </div>
+              <div class="bg-slate-900/80 p-4 rounded-xl border border-slate-800">
+                <div class="text-[11px] font-bold uppercase text-slate-400 mb-2">Sample Quality</div>
+                <div class="grid grid-cols-3 gap-2" id="sampleThumbnails">
+                  <div class="h-14 bg-slate-950 border border-dashed border-slate-800 rounded-lg flex items-center justify-center text-[10px] text-slate-600">Sample 1</div>
+                  <div class="h-14 bg-slate-950 border border-dashed border-slate-800 rounded-lg flex items-center justify-center text-[10px] text-slate-600">Sample 2</div>
+                  <div class="h-14 bg-slate-950 border border-dashed border-slate-800 rounded-lg flex items-center justify-center text-[10px] text-slate-600">Sample 3</div>
+                </div>
+                <button id="saveBiometricBtn" disabled class="w-full mt-3 py-2 rounded-xl bg-brand-600 hover:bg-brand-500 disabled:bg-slate-800 disabled:text-slate-500 text-white text-xs font-semibold">
+                  Save Biometrics to Cloud
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Admin: Reports Tab -->
+      <div id="adminTab-reports" class="admin-tab-content hidden space-y-3">
+        <div id="adminReportContainer"></div>
+      </div>
+    </section>
+
+    <!-- 3. TEACHER DASHBOARD -->
+    <section id="teacherDashboardView" class="hidden flex-col gap-5">
+      <div class="border-b border-slate-800 pb-3 flex items-center justify-between">
+        <div>
+          <h2 class="text-base font-bold text-white">Faculty Portal: Assigned Classes</h2>
+          <p class="text-xs text-slate-400">Perform biometric verification prior to unlocking class attendance sessions</p>
+        </div>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" id="teacherAssignedClassesContainer"></div>
+    </section>
+
+    <!-- 4. LIVE ATTENDANCE & BIOMETRIC SCANNER (Active Session) -->
+    <section id="scanningSessionView" class="hidden flex-col gap-4">
+      <div class="space-y-4">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+          
+          <div class="lg:col-span-7 glass-panel p-4 rounded-2xl border border-slate-800 flex flex-col items-center">
+            <div class="w-full flex items-center justify-between mb-2 text-xs">
+              <div class="flex items-center gap-2">
+                <span class="h-2 w-2 rounded-full bg-emerald-500 animate-ping"></span>
+                <span class="font-bold text-white" id="liveClassHeader">Class Name</span>
+              </div>
+              <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">Active Attendance</span>
+            </div>
+
+            <div class="video-canvas-container bg-black border border-slate-800 w-full aspect-video rounded-xl flex items-center justify-center relative">
+              <video id="attendVideo" autoplay playsinline muted class="w-full h-full object-cover"></video>
+              <canvas id="attendCanvas"></canvas>
+              <div id="attendScanOverlay" class="pulse-scan"></div>
+
+              <!-- Profile Popover On Match -->
+              <div id="detectedNameBanner" class="hidden absolute bottom-3 inset-x-3 bg-slate-900/95 border border-emerald-500/70 backdrop-blur-md p-3 rounded-2xl name-popup-anim shadow-2xl flex items-center justify-between z-20">
+                <div class="flex items-center gap-3">
+                  <div class="h-10 w-10 rounded-xl bg-emerald-500/20 text-emerald-400 font-bold flex items-center justify-center text-lg border border-emerald-500/40">
+                    <i class="fa-solid fa-circle-check"></i>
+                  </div>
+                  <div>
+                    <div class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Student Recognized</div>
+                    <div class="text-sm font-extrabold text-white truncate max-w-[170px]" id="bannerPersonName">Name</div>
+                    <div class="text-[11px] text-brand-300 font-mono" id="bannerPersonSub">Roll: -</div>
+                  </div>
+                </div>
+                <div class="text-right">
+                  <span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">PRESENT</span>
+                  <div class="text-[10px] text-slate-400 mt-1" id="bannerDetectTime">00:00</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="w-full mt-2.5 p-2.5 bg-slate-900/90 rounded-xl border border-slate-800 flex items-center justify-between text-xs">
+              <div id="recognitionFeedback" class="text-slate-300 truncate">
+                Center face in camera view...
+              </div>
+              <div class="text-slate-400 text-[11px]" id="engineStatusBadge">Model: TinyFace</div>
+            </div>
+
+            <div class="w-full mt-3 flex justify-between gap-2">
+              <button onclick="window.abortAttendanceSession()" class="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold">
+                Cancel
+              </button>
+              <button id="finishAttendanceBtn" class="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-lg">
+                <i class="fa-solid fa-clipboard-check"></i> Finalize Session
+              </button>
+            </div>
+          </div>
+
+          <!-- Real-Time Roster Column -->
+          <div class="lg:col-span-5 glass-panel p-4 rounded-2xl border border-slate-800 flex flex-col h-[400px] lg:h-[460px]">
+            <div class="flex items-center justify-between pb-2 border-b border-slate-800">
+              <div>
+                <h3 class="text-xs font-bold text-white">Class Roster</h3>
+                <p class="text-[10px] text-slate-400" id="liveSessionTurnoutSub">0 / 0 Marked</p>
+              </div>
+              <div class="text-right">
+                <span class="text-lg font-extrabold text-emerald-400" id="livePresentCount">0</span>
+                <span class="text-[10px] text-slate-400 block">Present</span>
+              </div>
+            </div>
+
+            <div id="liveStudentRoster" class="flex-1 overflow-y-auto custom-scrollbar space-y-2 mt-2.5 pr-1"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5. PRINCIPAL AUDIT DASHBOARD -->
+    <section id="principalView" class="hidden flex-col gap-5">
+      <div class="border-b border-slate-800 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <div>
+          <h2 class="text-base font-bold text-white">Principal Oversight & Reports</h2>
+          <p class="text-xs text-slate-400">Read-only institutional attendance registry and historical statistics</p>
+        </div>
+        <button onclick="window.exportAttendanceToCSV()" class="px-3 py-1.5 bg-brand-600 hover:bg-brand-500 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 self-start sm:self-auto">
+          <i class="fa-solid fa-file-csv"></i> Export CSV
+        </button>
+      </div>
+
+      <!-- Filters -->
+      <div class="glass-panel p-4 rounded-xl border border-slate-800 grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div>
+          <label class="text-[11px] text-slate-400 block mb-1">Filter by Class</label>
+          <select id="reportClassFilter" class="w-full p-2 border border-slate-700 rounded-lg text-xs text-white">
+            <option value="">All Classes</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-[11px] text-slate-400 block mb-1">Filter by Date</label>
+          <input type="date" id="reportDateFilter" class="w-full p-2 border border-slate-700 rounded-lg text-xs text-white" />
+        </div>
+        <div class="flex items-end">
+          <button onclick="window.applyReportFilters()" class="w-full py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-xs font-semibold">
+            Apply Filters
+          </button>
+        </div>
+      </div>
+
+      <!-- Sessions List -->
+      <div class="glass-panel rounded-xl border border-slate-800 overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-900 text-slate-400 uppercase tracking-wider border-b border-slate-800">
+            <tr>
+              <th class="p-2.5">Date & Time</th>
+              <th class="p-2.5">Class</th>
+              <th class="p-2.5">Teacher</th>
+              <th class="p-2.5">Turnout</th>
+              <th class="p-2.5 text-right">Records</th>
+            </tr>
+          </thead>
+          <tbody id="principalSessionTableBody" class="divide-y divide-slate-800 text-slate-300"></tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
+    import { 
+      getAuth, 
+      signInWithEmailAndPassword, 
+      signOut, 
+      onAuthStateChanged
+    } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js";
+    import { 
+      getFirestore, 
+      collection, 
+      doc, 
+      getDoc, 
+      getDocs, 
+      setDoc, 
+      addDoc, 
+      updateDoc, 
+      deleteDoc,
+      query,
+      where,
+      serverTimestamp
+    } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
+
+    // EmailJS Init (Keep your actual key)
+    emailjs.init("gnl6nXbGuXI17K7TY");
+
+    // Firebase Credentials (Preserved as requested)
+    const firebaseConfig = {
+      apiKey: "AIzaSyCrU6fJwkfvWsiSkeQ-MXkvTagADO_8eyk",
+      authDomain: "face-attendance-system-2f0b5.firebaseapp.com",
+      projectId: "face-attendance-system-2f0b5",
+      storageBucket: "face-attendance-system-2f0b5.firebasestorage.app",
+      messagingSenderId: "577511962862",
+      appId: "1:577511962862:web:8422d6bf7a1d85c9fb9bff",
+      measurementId: "G-3DS0THZGLB"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    // Global Application State
+    window.appState = {
+      currentUser: null,
+      currentUserProfile: null,
+      activeRole: null,
+      students: [],
+      teachers: [],
+      classes: [],
+      attendanceSessions: [],
+      modelsLoaded: false,
+      regMediaStream: null,
+      attendMediaStream: null,
+      regSamples: [],
+      attendRecognitionInterval: null,
+      currentLiveSession: null,
+      recognizedStudentMap: new Map(),
+      bannerTimeout: null,
+      principalEmail: "zenxken26@gmail.com",
+      matchThreshold: 0.50 // Configurable threshold (0.50 Euclidean distance)
+    };
+
+    // UI Helper: Toast Notifications
+    window.showToast = function(title, message, type = 'info') {
+      const container = document.getElementById('toastContainer');
+      const colors = {
+        success: 'border-emerald-500 bg-emerald-950/90 text-emerald-200',
+        error: 'border-red-500 bg-red-950/90 text-red-200',
+        info: 'border-brand-500 bg-indigo-950/90 text-indigo-200',
+        warning: 'border-amber-500 bg-amber-950/90 text-amber-200'
+      };
+      const toast = document.createElement('div');
+      toast.className = `p-3 rounded-xl border shadow-xl flex items-start gap-2.5 backdrop-blur-md transition-all duration-300 ${colors[type] || colors.info}`;
+      toast.innerHTML = `
+        <div class="flex-1 text-xs">
+          <div class="font-bold text-white">${title}</div>
+          <div class="mt-0.5 text-slate-300">${message}</div>
+        </div>
+      `;
+      container.appendChild(toast);
+      setTimeout(() => toast.remove(), 4000);
+    };
+
+    // UI Helper: Modals
+    window.openModal = function(htmlContent) {
+      document.getElementById('modalContent').innerHTML = htmlContent;
+      document.getElementById('globalModalBackdrop').classList.remove('hidden');
+      document.getElementById('globalModalBackdrop').classList.add('flex');
+    };
+    window.closeModal = function() {
+      document.getElementById('globalModalBackdrop').classList.add('hidden');
+      document.getElementById('globalModalBackdrop').classList.remove('flex');
+      document.getElementById('modalContent').innerHTML = '';
+    };
+
+    // Model Loader
+    async function loadFaceApiModels() {
+      if (window.appState.modelsLoaded) return true;
+      try {
+        const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
+        await Promise.all([
+          faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+          faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+          faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
+        ]);
+        window.appState.modelsLoaded = true;
+        return true;
+      } catch (err) {
+        window.showToast("AI Model Error", "Failed to load face detection neural weights from CDN.", "error");
+        return false;
+      }
+    }
+
+    // Mathematical Euclidean Distance Calculation
+    function calculateEuclideanDistance(desc1, desc2) {
+      if (!desc1 || !desc2 || desc1.length !== desc2.length) return 1.0;
+      let sum = 0;
+      for (let i = 0; i < desc1.length; i++) {
+        const diff = desc1[i] - desc2[i];
+        sum += diff * diff;
+      }
+      return Math.sqrt(sum);
+    }
+
+    // Role-Based Router & Auth Listener
+    onAuthStateChanged(auth, async (user) => {
+      const loginSection = document.getElementById('loginSection');
+      const adminView = document.getElementById('adminView');
+      const teacherView = document.getElementById('teacherDashboardView');
+      const principalView = document.getElementById('principalView');
+      const navUserBadge = document.getElementById('navUserBadge');
+
+      if (user) {
+        window.appState.currentUser = user;
+
+        // Fetch User Role from Firestore without insecure admin fallback
+        let userDocSnap = null;
+        try {
+          userDocSnap = await getDoc(doc(db, "users", user.uid));
+        } catch (e) {
+          console.error("Auth profile error:", e);
+        }
+
+        if (!userDocSnap || !userDocSnap.exists()) {
+          // If no assigned profile, default to read-only restricted guest
+          window.appState.currentUserProfile = {
+            uid: user.uid,
+            email: user.email,
+            name: user.email.split('@')[0],
+            role: 'Guest',
+            assignedClasses: []
+          };
+        } else {
+          window.appState.currentUserProfile = userDocSnap.data();
+        }
+
+        const role = window.appState.currentUserProfile.role || 'Guest';
+        window.appState.activeRole = role;
+
+        // Populate Top Nav Bar
+        navUserBadge.classList.remove('hidden');
+        navUserBadge.classList.add('flex');
+        document.getElementById('navUserName').innerText = window.appState.currentUserProfile.name || user.email;
+        document.getElementById('navUserRole').innerText = role;
+        document.getElementById('navUserAvatar').innerText = (window.appState.currentUserProfile.name || user.email).charAt(0).toUpperCase();
+
+        loginSection.classList.add('hidden');
+        adminView.classList.add('hidden');
+        teacherView.classList.add('hidden');
+        principalView.classList.add('hidden');
+
+        await loadInstitutionalData();
+        loadFaceApiModels();
+
+        // Route by Strict Role Permission
+        if (role === 'Admin') {
+          adminView.classList.remove('hidden');
+          adminView.classList.add('flex');
+          window.switchAdminTab('classes');
+        } else if (role === 'Teacher') {
+          teacherView.classList.remove('hidden');
+          teacherView.classList.add('flex');
+          renderTeacherAssignedClasses();
+        } else if (role === 'Principal') {
+          principalView.classList.remove('hidden');
+          principalView.classList.add('flex');
+          renderPrincipalReportsView();
+        } else {
+          window.showToast("Access Restricted", "Your account does not possess authorized role privileges.", "warning");
+        }
+      } else {
+        window.appState.currentUser = null;
+        window.appState.currentUserProfile = null;
+        window.appState.activeRole = null;
+        navUserBadge.classList.add('hidden');
+        loginSection.classList.remove('hidden');
+        adminView.classList.add('hidden');
+        teacherView.classList.add('hidden');
+        principalView.classList.add('hidden');
+      }
+    });
+
+    // Firestore Data Synchronizer
+    async function loadInstitutionalData() {
+      try {
+        const [studSnap, teachSnap, clsSnap, sessSnap] = await Promise.all([
+          getDocs(collection(db, "students")),
+          getDocs(collection(db, "teachers")),
+          getDocs(collection(db, "classes")),
+          getDocs(collection(db, "attendanceSessions"))
+        ]);
+
+        window.appState.students = studSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        window.appState.teachers = teachSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        window.appState.classes = clsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        window.appState.attendanceSessions = sessSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+          .sort((a,b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+
+      } catch (err) {
+        console.error("Data load failed:", err);
+      }
+    }
+
+    // Login Form
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = document.getElementById('loginEmail').value.trim();
+      const password = document.getElementById('loginPassword').value;
+      const submitBtn = document.getElementById('loginSubmitBtn');
+      const spinner = document.getElementById('loginSpinner');
+      const btnText = document.getElementById('loginBtnText');
+
+      submitBtn.disabled = true;
+      spinner.classList.remove('hidden');
+      btnText.innerText = "Authenticating...";
+
+      try {
+        await signInWithEmailAndPassword(auth, email, password);
+        window.showToast("Signed In", "Welcome back to the portal", "success");
+      } catch (err) {
+        window.showToast("Authentication Failed", err.message, "error");
+      } finally {
+        submitBtn.disabled = false;
+        spinner.classList.add('hidden');
+        btnText.innerText = "Sign In to Dashboard";
+      }
+    });
+
+    document.getElementById('togglePasswordBtn').addEventListener('click', () => {
+      const pass = document.getElementById('loginPassword');
+      const icon = document.getElementById('togglePasswordIcon');
+      if (pass.type === 'password') {
+        pass.type = 'text';
+        icon.classList.remove('fa-eye');
+        icon.classList.add('fa-eye-slash');
+      } else {
+        pass.type = 'password';
+        icon.classList.remove('fa-eye-slash');
+        icon.classList.add('fa-eye');
+      }
+    });
+
+    document.getElementById('logoutBtn').addEventListener('click', () => {
+      window.stopRegCam();
+      window.abortAttendanceSession();
+      signOut(auth);
+    });
+
+    // Admin Navigation
+    window.switchAdminTab = function(tabName) {
+      document.querySelectorAll('.admin-tab-btn').forEach(btn => {
+        if (btn.dataset.tab === tabName) {
+          btn.className = "admin-tab-btn active px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-brand-600 text-white";
+        } else {
+          btn.className = "admin-tab-btn px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-900 text-slate-400 hover:text-white";
+        }
+      });
+      document.querySelectorAll('.admin-tab-content').forEach(tc => tc.classList.add('hidden'));
+      const activeContent = document.getElementById(`adminTab-${tabName}`);
+      if (activeContent) activeContent.classList.remove('hidden');
+
+      if (tabName === 'classes') renderAdminClasses();
+      if (tabName === 'students') renderStudentsTable();
+      if (tabName === 'teachers') renderTeachersTable();
+      if (tabName === 'faceRegistration') populateFaceRegistrationDropdown();
+      if (tabName === 'reports') renderAdminReports();
+    };
+
+    // Render Classes in Admin View
+    function renderAdminClasses() {
+      const container = document.getElementById('adminClassCardsContainer');
+      const clss = window.appState.classes;
+      if (clss.length === 0) {
+        container.innerHTML = `<div class="col-span-full p-6 text-center text-slate-500 glass-panel rounded-2xl">No classes registered. Click "+ Add Class" to begin.</div>`;
+        return;
+      }
+
+      container.innerHTML = clss.map(c => `
+        <div class="glass-panel p-4 rounded-2xl border border-slate-800 hover:border-brand-500 transition relative">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-[10px] px-2 py-0.5 rounded-full bg-brand-500/20 text-brand-300 font-semibold border border-brand-500/30">
+              ${c.semester || 'Semester 1'}
+            </span>
+            <button onclick="window.confirmDeleteClass('${c.classId}')" title="Delete Class" class="h-7 w-7 rounded-lg bg-red-500/10 hover:bg-red-500/30 text-red-400 flex items-center justify-center transition">
+              <i class="fa-solid fa-trash-can text-xs"></i>
+            </button>
+          </div>
+          <h4 class="text-sm font-bold text-white">${c.className}</h4>
+          <p class="text-[11px] text-slate-400 mt-1">${c.department || 'Department'}</p>
+          <div class="mt-3 pt-3 border-t border-slate-800 flex items-center justify-between text-[11px] text-slate-500">
+            <span>${window.appState.students.filter(s => s.classId === c.classId).length} Enrolled</span>
+            <span class="text-brand-300">Teacher: ${c.assignedTeacherId || 'Unassigned'}</span>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    window.confirmDeleteClass = async function(classId) {
+      if (!confirm(`Are you certain you want to delete class: "${classId}"?`)) return;
+      try {
+        await deleteDoc(doc(db, "classes", classId));
+        window.showToast("Class Deleted", classId, "info");
+        await loadInstitutionalData();
+        renderAdminClasses();
+      } catch (err) {
+        window.showToast("Delete Error", err.message, "error");
+      }
+    };
+
+    // Teacher View: Assigned Classes & Identity Verification
+    function renderTeacherAssignedClasses() {
+      const container = document.getElementById('teacherAssignedClassesContainer');
+      const currentTeacherId = window.appState.currentUserProfile.teacherId || window.appState.currentUserProfile.uid;
+      const assigned = window.appState.classes.filter(c => c.assignedTeacherId === currentTeacherId || window.appState.currentUserProfile.assignedClasses?.includes(c.classId));
+
+      if (assigned.length === 0) {
+        container.innerHTML = `<div class="col-span-full p-6 text-center text-slate-500 glass-panel rounded-2xl">No classes currently assigned to your account. Contact the Administrator.</div>`;
+        return;
+      }
+
+      container.innerHTML = assigned.map(c => `
+        <div class="glass-panel p-5 rounded-2xl border border-slate-800 space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-[10px] px-2 py-0.5 rounded-full bg-brand-500/20 text-brand-300 font-semibold border border-brand-500/30">${c.classId}</span>
+            <span class="text-xs text-slate-400">${window.appState.students.filter(s => s.classId === c.classId).length} Enrolled</span>
+          </div>
+          <h3 class="text-sm font-bold text-white">${c.className}</h3>
+          <p class="text-[11px] text-slate-400">${c.department || 'Curriculum Section'}</p>
+          <button onclick="window.promptTeacherVerification('${c.classId}')" class="w-full py-2.5 bg-brand-600 hover:bg-brand-500 text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-2">
+            <i class="fa-solid fa-camera"></i> Verify Face & Start Attendance
+          </button>
+        </div>
+      `).join('');
+    }
+
+    // Teacher Pre-Session Face Verification
+    window.promptTeacherVerification = async function(classId) {
+      const cls = window.appState.classes.find(c => c.classId === classId);
+      if (!cls) return;
+
+      const currentTeacherId = window.appState.currentUserProfile.teacherId || window.appState.currentUserProfile.uid;
+      const teacherRecord = window.appState.teachers.find(t => t.teacherId === currentTeacherId || t.email === window.appState.currentUserProfile.email);
+
+      if (!teacherRecord || !teacherRecord.faceDescriptor) {
+        window.showToast("Biometric Missing", "No face descriptor enrolled for your faculty profile. Contact Admin to register your face.", "error");
+        return;
+      }
+
+      const html = `
+        <div class="text-center pb-3 border-b border-slate-800">
+          <h3 class="text-base font-bold text-white">Faculty Identity Verification</h3>
+          <p class="text-xs text-slate-400 mt-0.5">Please scan your face to authenticate before unlocking attendance for <strong>${cls.className}</strong></p>
+        </div>
+        <div class="my-4 flex flex-col items-center">
+          <div class="video-canvas-container bg-black border border-slate-800 w-full aspect-video rounded-xl flex items-center justify-center relative">
+            <video id="verifyVideo" autoplay playsinline muted class="w-full h-full object-cover"></video>
+            <canvas id="verifyCanvas"></canvas>
+            <div class="pulse-scan"></div>
+          </div>
+          <div id="verifyStatusText" class="mt-2 text-xs text-brand-300 font-medium">Looking for faculty face...</div>
+        </div>
+        <button onclick="window.closeModal(); window.stopVerifyCam();" class="w-full py-2 bg-slate-800 text-slate-300 rounded-xl text-xs">Cancel</button>
+      `;
+      window.openModal(html);
+      await loadFaceApiModels();
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 480, height: 360, facingMode: 'user' } });
+        window.appState.verifyMediaStream = stream;
+        const video = document.getElementById('verifyVideo');
+        video.srcObject = stream;
+
+        window.appState.verifyInterval = setInterval(async () => {
+          if (!video || video.paused || video.ended) return;
+          const detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks().withFaceDescriptor();
+          if (detection) {
+            const dist = calculateEuclideanDistance(Array.from(detection.descriptor), teacherRecord.faceDescriptor);
+            if (dist <= window.appState.matchThreshold) {
+              clearInterval(window.appState.verifyInterval);
+              window.stopVerifyCam();
+              window.closeModal();
+              window.showToast("Faculty Verified", `Welcome, ${teacherRecord.fullName}`, "success");
+              window.launchLiveAttendanceSession(cls, teacherRecord);
+            } else {
+              document.getElementById('verifyStatusText').innerText = `Face does not match assigned teacher (Confidence diff: ${dist.toFixed(2)})`;
+            }
+          }
+        }, 400);
+      } catch (err) {
+        window.showToast("Camera Error", "Webcam access denied for verification.", "error");
+      }
+    };
+
+    window.stopVerifyCam = function() {
+      if (window.appState.verifyInterval) clearInterval(window.appState.verifyInterval);
+      if (window.appState.verifyMediaStream) {
+        window.appState.verifyMediaStream.getTracks().forEach(t => t.stop());
+        window.appState.verifyMediaStream = null;
+      }
+    };
+
+    // Live Attendance Execution
+    window.launchLiveAttendanceSession = async function(cls, teacherRecord) {
+      document.getElementById('teacherDashboardView').classList.add('hidden');
+      document.getElementById('adminView').classList.add('hidden');
+      document.getElementById('scanningSessionView').classList.remove('hidden');
+      document.getElementById('scanningSessionView').classList.add('flex');
+
+      const enrolledStudents = window.appState.students.filter(s => s.classId === cls.classId && s.status === 'Active');
+      const eligibleDescriptors = enrolledStudents.filter(s => s.faceRegistered && s.faceDescriptor);
+
+      window.appState.recognizedStudentMap.clear();
+      window.appState.currentLiveSession = {
+        sessionId: `sess_${Date.now()}`,
+        classId: cls.classId,
+        className: cls.className,
+        teacherId: teacherRecord.teacherId,
+        teacherName: teacherRecord.fullName,
+        date: new Date().toISOString().split('T')[0],
+        startTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        enrolledStudents: enrolledStudents,
+        eligibleDescriptors: eligibleDescriptors
+      };
+
+      document.getElementById('liveClassHeader').innerText = cls.className;
+      document.getElementById('liveSessionTurnoutSub').innerText = `0 / ${enrolledStudents.length} Marked Present`;
+      document.getElementById('livePresentCount').innerText = '0';
+      document.getElementById('liveStudentRoster').innerHTML = '';
+
+      renderLiveRosterPlaceholders(enrolledStudents);
+      await startRealTimeFaceRecognition();
+    };
+
+    function renderLiveRosterPlaceholders(enrolled) {
+      const roster = document.getElementById('liveStudentRoster');
+      roster.innerHTML = enrolled.map(st => `
+        <div id="roster-item-${st.studentId}" class="p-2.5 bg-slate-900/60 rounded-xl border border-slate-800 flex items-center justify-between text-xs transition">
+          <div class="flex items-center gap-2">
+            <div class="h-7 w-7 rounded-full bg-slate-800 text-slate-400 font-bold flex items-center justify-center text-xs">
+              ${st.rollNo || '•'}
+            </div>
+            <div>
+              <div class="font-bold text-white text-xs">${st.fullName}</div>
+              <div class="text-[10px] text-slate-500 font-mono">${st.studentId}</div>
+            </div>
+          </div>
+          <span id="badge-status-${st.studentId}" class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-slate-800 text-slate-400">PENDING</span>
+        </div>
+      `).join('');
+    }
+
+    async function startRealTimeFaceRecognition() {
+      await loadFaceApiModels();
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480, facingMode: 'user' } });
+        window.appState.attendMediaStream = stream;
+        const video = document.getElementById('attendVideo');
+        video.srcObject = stream;
+        video.onloadedmetadata = () => runAttendanceLoop();
+      } catch (err) {
+        window.showToast("Camera Error", "Unable to start webcam stream.", "error");
+      }
+    }
+
+    function runAttendanceLoop() {
+      const video = document.getElementById('attendVideo');
+      const canvas = document.getElementById('attendCanvas');
+      const feedback = document.getElementById('recognitionFeedback');
+      
+      canvas.width = video.videoWidth || 640;
+      canvas.height = video.videoHeight || 480;
+
+      const candidates = window.appState.currentLiveSession.eligibleDescriptors;
+
+      window.appState.attendRecognitionInterval = setInterval(async () => {
+        if (!video || video.paused || video.ended) return;
+
+        const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.5 }))
+          .withFaceLandmarks()
+          .withFaceDescriptors();
+
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        if (detections.length === 0) {
+          feedback.innerHTML = `<span class="text-slate-400">Position face within the camera frame</span>`;
+          return;
+        }
+
+        if (detections.length > 2) {
+          feedback.innerHTML = `<span class="text-amber-400 font-semibold"><i class="fa-solid fa-triangle-exclamation mr-1"></i> Multiple faces detected. Please scan one by one.</span>`;
+          return;
+        }
+
+        feedback.innerHTML = `<span class="text-brand-300 font-semibold">Scanning ${detections.length} face(s)...</span>`;
+
+        detections.forEach(det => {
+          const box = det.detection.box;
+          const descriptor = Array.from(det.descriptor);
+
+          let bestMatch = null;
+          let minDistance = 1.0;
+
+          candidates.forEach(cand => {
+            const dist = calculateEuclideanDistance(descriptor, cand.faceDescriptor);
+            if (dist < minDistance) {
+              minDistance = dist;
+              bestMatch = cand;
+            }
+          });
+
+          if (bestMatch && minDistance <= window.appState.matchThreshold) {
+            ctx.strokeStyle = '#10b981';
+            ctx.lineWidth = 3;
+            ctx.strokeRect(box.x, box.y, box.width, box.height);
+
+            drawNameTag(ctx, box, `${bestMatch.fullName} [Roll: ${bestMatch.rollNo || '✓'}]`);
+            triggerLiveMatch(bestMatch);
+          } else {
+            ctx.strokeStyle = '#ef4444';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(box.x, box.y, box.width, box.height);
+            drawNameTag(ctx, box, `Unregistered Face`);
+          }
+        });
+      }, 350);
+    }
+
+    function triggerLiveMatch(student) {
+      const map = window.appState.recognizedStudentMap;
+      if (map.has(student.studentId)) return; // Duplicate prevention
+
+      const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      map.set(student.studentId, {
+        studentId: student.studentId,
+        studentName: student.fullName,
+        rollNo: student.rollNo,
+        markedTime: timestamp,
+        status: 'Present'
+      });
+
+      // Update Live UI
+      document.getElementById('bannerPersonName').innerText = student.fullName;
+      document.getElementById('bannerPersonSub').innerText = `Roll: ${student.rollNo || '-'} | ID: ${student.studentId}`;
+      document.getElementById('bannerDetectTime').innerText = timestamp;
+      document.getElementById('detectedNameBanner').classList.remove('hidden');
+
+      if (window.appState.bannerTimeout) clearTimeout(window.appState.bannerTimeout);
+      window.appState.bannerTimeout = setTimeout(() => {
+        document.getElementById('detectedNameBanner').classList.add('hidden');
+      }, 2500);
+
+      const rosterBadge = document.getElementById(`badge-status-${student.studentId}`);
+      if (rosterBadge) {
+        rosterBadge.className = "px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-500/20 text-emerald-400";
+        rosterBadge.innerText = `PRESENT (${timestamp})`;
+      }
+
+      const presentCount = map.size;
+      const total = window.appState.currentLiveSession.enrolledStudents.length;
+      document.getElementById('livePresentCount').innerText = presentCount;
+      document.getElementById('liveSessionTurnoutSub').innerText = `${presentCount} / ${total} Marked Present`;
+      window.showToast("Attendance Saved", `${student.fullName} marked Present`, "success");
+    }
+
+    function drawNameTag(ctx, box, label) {
+      ctx.font = 'bold 12px Inter, sans-serif';
+      const textWidth = ctx.measureText(label).width;
+      const boxY = box.y > 24 ? box.y - 24 : box.y + box.height + 4;
+
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
+      ctx.fillRect(box.x, boxY, textWidth + 12, 20);
+      ctx.fillStyle = '#f8fafc';
+      ctx.fillText(label, box.x + 6, boxY + 14);
+    }
+
+    window.abortAttendanceSession = function() {
+      if (window.appState.attendRecognitionInterval) clearInterval(window.appState.attendRecognitionInterval);
+      if (window.appState.attendMediaStream) {
+        window.appState.attendMediaStream.getTracks().forEach(t => t.stop());
+        window.appState.attendMediaStream = null;
+      }
+      document.getElementById('scanningSessionView').classList.add('hidden');
+      if (window.appState.activeRole === 'Admin') {
+        document.getElementById('adminView').classList.remove('hidden');
+      } else {
+        document.getElementById('teacherDashboardView').classList.remove('hidden');
+      }
+    };
+
+    // Finalize Session and Save Records Atomically to Firestore
+    document.getElementById('finishAttendanceBtn').addEventListener('click', async () => {
+      const session = window.appState.currentLiveSession;
+      if (!session) return;
+
+      const isConfirmed = confirm("Finalize and commit attendance records to the institutional cloud registry?");
+      if (!isConfirmed) return;
+
+      window.abortAttendanceSession();
+
+      const enrolled = session.enrolledStudents;
+      const recognized = window.appState.recognizedStudentMap;
+      const finalRecords = [];
+      let presentCount = 0;
+
+      enrolled.forEach(st => {
+        if (recognized.has(st.studentId)) {
+          presentCount++;
+          finalRecords.push({
+            studentId: st.studentId,
+            studentName: st.fullName,
+            rollNo: st.rollNo || '',
+            status: 'Present',
+            time: recognized.get(st.studentId).markedTime
+          });
+        } else {
+          finalRecords.push({
+            studentId: st.studentId,
+            studentName: st.fullName,
+            rollNo: st.rollNo || '',
+            status: 'Absent',
+            time: '-'
+          });
+        }
+      });
+
+      const total = enrolled.length || 1;
+      const percentage = Math.round((presentCount / total) * 100);
+
+      const sessionData = {
+        sessionId: session.sessionId,
+        classId: session.classId,
+        className: session.className,
+        teacherId: session.teacherId,
+        teacherName: session.teacherName,
+        date: session.date,
+        startTime: session.startTime,
+        endTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        totalStudents: total,
+        presentCount: presentCount,
+        absentCount: total - presentCount,
+        attendancePercentage: percentage,
+        records: finalRecords,
+        timestamp: serverTimestamp()
+      };
+
+      try {
+        await addDoc(collection(db, "attendanceSessions"), sessionData);
+        window.showToast("Saved to Cloud", "Session attendance permanently archived.", "success");
+        sendSummaryEmailToPrincipal(sessionData);
+      } catch (err) {
+        window.showToast("Database Save Failed", err.message, "error");
+      }
+
+      await loadInstitutionalData();
+      if (window.appState.activeRole === 'Admin') renderAdminClasses();
+      else renderTeacherAssignedClasses();
+    });
+
+    async function sendSummaryEmailToPrincipal(sessionData) {
+      const emailParams = {
+        to_email: window.appState.principalEmail,
+        class_name: sessionData.className,
+        teacher_name: sessionData.teacherName,
+        date: sessionData.date,
+        time: `${sessionData.startTime} - ${sessionData.endTime}`,
+        turnout: `${sessionData.presentCount} / ${sessionData.totalStudents} (${sessionData.attendancePercentage}%)`,
+        summary: `Session finalized with ${sessionData.presentCount} students present out of ${sessionData.totalStudents}.`
+      };
+
+      try {
+        await emailjs.send("service_6agpi3k", "template_skoug4p", emailParams);
+        window.showToast("Audit Dispatched", `Report sent to Principal (${window.appState.principalEmail})`, "info");
+      } catch (e) {
+        console.warn("EmailJS notification error:", e);
+      }
+    }
+
+    // Biometric Face Enrollment (Admin Function)
+    function populateFaceRegistrationDropdown() {
+      const type = document.getElementById('regTypeSelect')?.value || 'student';
+      const select = document.getElementById('registerEntitySelect');
+      if (!select) return;
+
+      if (type === 'student') {
+        select.innerHTML = `<option value="">-- Choose Student to Enroll --</option>` +
+          window.appState.students.map(s => `
+            <option value="${s.studentId}">
+              ${s.fullName} (${s.studentId}) - ${s.faceRegistered ? '✓ Enrolled' : 'Pending'}
+            </option>
+          `).join('');
+      } else {
+        select.innerHTML = `<option value="">-- Choose Teacher to Enroll --</option>` +
+          window.appState.teachers.map(t => `
+            <option value="${t.teacherId}">
+              ${t.fullName} (${t.teacherId}) - ${t.faceRegistered ? '✓ Enrolled' : 'Pending'}
+            </option>
+          `).join('');
+      }
+    }
+
+    document.getElementById('regTypeSelect')?.addEventListener('change', () => {
+      populateFaceRegistrationDropdown();
+      document.getElementById('regSelectedDetails').innerHTML = `<p class="text-slate-500 italic">Select candidate from dropdown.</p>`;
+      window.appState.regSamples = [];
+      updateSampleUI();
+    });
+
+    document.getElementById('registerEntitySelect')?.addEventListener('change', (e) => {
+      const id = e.target.value;
+      const type = document.getElementById('regTypeSelect').value;
+      const detailsContainer = document.getElementById('regSelectedDetails');
+
+      if (!id) {
+        detailsContainer.innerHTML = `<p class="text-slate-500 italic">Select candidate from dropdown.</p>`;
+        return;
+      }
+
+      if (type === 'student') {
+        const stud = window.appState.students.find(s => s.studentId === id);
+        if (stud) {
+          detailsContainer.innerHTML = `
+            <div><span class="text-slate-400">Role:</span> <span class="font-bold text-emerald-400">Student</span></div>
+            <div><span class="text-slate-400">Name:</span> <span class="font-bold text-white">${stud.fullName}</span></div>
+            <div><span class="text-slate-400">ID:</span> <span class="text-brand-300 font-mono">${stud.studentId}</span></div>
+            <div><span class="text-slate-400">Class:</span> <span class="text-slate-300">${stud.classId}</span></div>
+          `;
+        }
+      } else {
+        const tch = window.appState.teachers.find(t => t.teacherId === id);
+        if (tch) {
+          detailsContainer.innerHTML = `
+            <div><span class="text-slate-400">Role:</span> <span class="font-bold text-indigo-400">Teacher / Faculty</span></div>
+            <div><span class="text-slate-400">Name:</span> <span class="font-bold text-white">${tch.fullName}</span></div>
+            <div><span class="text-slate-400">ID:</span> <span class="text-brand-300 font-mono">${tch.teacherId}</span></div>
+            <div><span class="text-slate-400">Email:</span> <span class="text-slate-300">${tch.email}</span></div>
+          `;
+        }
+      }
+      window.appState.regSamples = [];
+      updateSampleUI();
+    });
+
+    document.getElementById('startRegCamBtn')?.addEventListener('click', async () => {
+      const id = document.getElementById('registerEntitySelect').value;
+      if (!id) {
+        window.showToast("Notice", "Select a student or teacher first.", "warning");
+        return;
+      }
+      await loadFaceApiModels();
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480, facingMode: 'user' } });
+        window.appState.regMediaStream = stream;
+        const video = document.getElementById('regVideo');
+        video.srcObject = stream;
+        document.getElementById('regCameraPlaceholder').classList.add('hidden');
+        document.getElementById('regScanOverlay').classList.remove('hidden');
+        document.getElementById('captureFaceBtn').disabled = false;
+      } catch (err) {
+        window.showToast("Camera Error", "Webcam access denied.", "error");
+      }
+    });
+
+    window.stopRegCam = function() {
+      if (window.appState.regMediaStream) {
+        window.appState.regMediaStream.getTracks().forEach(t => t.stop());
+        window.appState.regMediaStream = null;
+      }
+      document.getElementById('regCameraPlaceholder')?.classList.remove('hidden');
+      document.getElementById('regScanOverlay')?.classList.add('hidden');
+      if (document.getElementById('captureFaceBtn')) document.getElementById('captureFaceBtn').disabled = true;
+    };
+    document.getElementById('stopRegCamBtn')?.addEventListener('click', window.stopRegCam);
+
+    document.getElementById('captureFaceBtn')?.addEventListener('click', async () => {
+      const video = document.getElementById('regVideo');
+      if (!video || !video.srcObject) return;
+
+      const detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks().withFaceDescriptor();
+      if (!detection) {
+        window.showToast("No Face Detected", "Ensure face is fully illuminated and facing camera.", "warning");
+        return;
+      }
+
+      window.appState.regSamples.push(Array.from(detection.descriptor));
+      updateSampleUI();
+
+      if (window.appState.regSamples.length >= 3) {
+        document.getElementById('captureFaceBtn').disabled = true;
+        document.getElementById('saveBiometricBtn').disabled = false;
+        window.showToast("Samples Captured", "3 clean frames captured. Ready to commit.", "success");
+      }
+    });
+
+    function updateSampleUI() {
+      const count = window.appState.regSamples.length;
+      document.getElementById('sampleCountText').innerText = `${count}/3`;
+      const thumbs = document.getElementById('sampleThumbnails').children;
+      for (let i = 0; i < 3; i++) {
+        if (i < count) {
+          thumbs[i].className = "h-14 bg-emerald-950/60 border border-emerald-500 rounded-lg flex items-center justify-center text-xs text-emerald-300 font-semibold";
+          thumbs[i].innerHTML = `<i class="fa-solid fa-check mr-1"></i> Sample ${i + 1}`;
+        } else {
+          thumbs[i].className = "h-14 bg-slate-950 border border-dashed border-slate-800 rounded-lg flex items-center justify-center text-[10px] text-slate-600";
+          thumbs[i].innerHTML = `Sample ${i + 1}`;
+        }
+      }
+    }
+
+    document.getElementById('saveBiometricBtn')?.addEventListener('click', async () => {
+      const id = document.getElementById('registerEntitySelect').value;
+      const type = document.getElementById('regTypeSelect').value;
+      if (!id || window.appState.regSamples.length < 3) return;
+
+      // Compute Averaged 128-dimensional Normalized Descriptor
+      const avgDescriptor = new Array(128).fill(0);
+      for (let i = 0; i < 128; i++) {
+        let sum = 0;
+        for (const sample of window.appState.regSamples) sum += sample[i];
+        avgDescriptor[i] = sum / window.appState.regSamples.length;
+      }
+
+      try {
+        const targetCollection = type === 'student' ? 'students' : 'teachers';
+        await updateDoc(doc(db, targetCollection, id), {
+          faceRegistered: true,
+          faceDescriptor: avgDescriptor,
+          biometricUpdatedAt: serverTimestamp()
+        });
+
+        window.showToast("Biometrics Committed", `Facial profile enrolled for ${id}`, "success");
+        window.stopRegCam();
+        window.appState.regSamples = [];
+        updateSampleUI();
+        document.getElementById('saveBiometricBtn').disabled = true;
+        await loadInstitutionalData();
+        renderStudentsTable();
+        renderTeachersTable();
+        populateFaceRegistrationDropdown();
+      } catch (err) {
+        window.showToast("Database Save Failed", err.message, "error");
+      }
+    });
+
+    // Students Directory Management
+    function renderStudentsTable() {
+      const tbody = document.getElementById('studentTableBody');
+      const queryText = (document.getElementById('studentSearchInput')?.value || '').toLowerCase();
+      const filtered = window.appState.students.filter(s => 
+        s.fullName.toLowerCase().includes(queryText) || 
+        s.studentId.toLowerCase().includes(queryText) ||
+        (s.rollNo && s.rollNo.toLowerCase().includes(queryText))
+      );
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-slate-500">No student records found.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = filtered.map(s => `
+        <tr class="hover:bg-slate-900/40">
+          <td class="p-2.5 font-semibold text-white font-mono">${s.studentId}</td>
+          <td class="p-2.5">${s.fullName}</td>
+          <td class="p-2.5 text-slate-400">${s.classId || 'N/A'}</td>
+          <td class="p-2.5">${s.rollNo || '-'}</td>
+          <td class="p-2.5">
+            ${s.faceRegistered 
+              ? `<span class="px-2 py-0.5 rounded-full text-[10px] bg-emerald-500/20 text-emerald-400">Enrolled</span>`
+              : `<span class="px-2 py-0.5 rounded-full text-[10px] bg-amber-500/20 text-amber-400">Pending</span>`}
+          </td>
+          <td class="p-2.5 text-right">
+            <button onclick="window.deleteStudentRecord('${s.studentId}')" title="Delete Student" class="text-slate-500 hover:text-red-400 p-1">
+              <i class="fa-solid fa-trash"></i>
+            </button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    document.getElementById('studentSearchInput')?.addEventListener('input', renderStudentsTable);
+
+    window.deleteStudentRecord = async function(id) {
+      if (!confirm(`Delete student record "${id}"? This action cannot be undone.`)) return;
+      try {
+        await deleteDoc(doc(db, "students", id));
+        window.showToast("Deleted", `Student ${id} removed.`, "info");
+        await loadInstitutionalData();
+        renderStudentsTable();
+      } catch (err) {
+        window.showToast("Error", err.message, "error");
+      }
+    };
+
+    // Faculty Directory Management
+    function renderTeachersTable() {
+      const tbody = document.getElementById('teacherTableBody');
+      const teachers = window.appState.teachers;
+
+      if (teachers.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-slate-500">No faculty members found.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = teachers.map(t => `
+        <tr class="hover:bg-slate-900/40">
+          <td class="p-2.5 font-semibold text-white font-mono">${t.teacherId}</td>
+          <td class="p-2.5">${t.fullName}</td>
+          <td class="p-2.5 text-slate-400">${t.email}</td>
+          <td class="p-2.5">
+            ${t.faceRegistered 
+              ? `<span class="px-2 py-0.5 rounded-full text-[10px] bg-emerald-500/20 text-emerald-400">Enrolled</span>`
+              : `<span class="px-2 py-0.5 rounded-full text-[10px] bg-amber-500/20 text-amber-400">Pending</span>`}
+          </td>
+          <td class="p-2.5 text-right">
+            <button onclick="window.deleteTeacherRecord('${t.teacherId}')" title="Delete Faculty" class="text-slate-500 hover:text-red-400 p-1">
+              <i class="fa-solid fa-trash"></i>
+            </button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    window.deleteTeacherRecord = async function(id) {
+      if (!confirm(`Delete faculty record "${id}"?`)) return;
+      try {
+        await deleteDoc(doc(db, "teachers", id));
+        window.showToast("Deleted", `Teacher ${id} removed.`, "info");
+        await loadInstitutionalData();
+        renderTeachersTable();
+      } catch (err) {
+        window.showToast("Error", err.message, "error");
+      }
+    };
+
+    // Modals: Add Class / Add Student / Add Teacher
+    window.openAddClassModal = function() {
+      const teachers = window.appState.teachers;
+      const teacherOptions = teachers.map(t => `<option value="${t.teacherId}">${t.fullName} (${t.teacherId})</option>`).join('');
+
+      const html = `
+        <h3 class="text-sm font-bold text-white mb-3">Add Academic Class</h3>
+        <form id="addClassForm" class="space-y-3">
+          <div>
+            <label class="text-[11px] text-slate-400 block mb-1">Class Code / ID *</label>
+            <input type="text" id="mClsId" required placeholder="CSE-301" class="w-full border border-slate-700 rounded-xl p-2.5 text-xs text-white" />
+          </div>
+          <div>
+            <label class="text-[11px] text-slate-400 block mb-1">Class Title *</label>
+            <input type="text" id="mClsName" required placeholder="Computer Systems Architecture" class="w-full border border-slate-700 rounded-xl p-2.5 text-xs text-white" />
+          </div>
+          <div>
+            <label class="text-[11px] text-slate-400 block mb-1">Department</label>
+            <input type="text" id="mClsDept" placeholder="Computer Science & Engineering" class="w-full border border-slate-700 rounded-xl p-2.5 text-xs text-white" />
+          </div>
+          <div>
+            <label class="text-[11px] text-slate-400 block mb-1">Assign Primary Faculty</label>
+            <select id="mClsTeacher" class="w-full border border-slate-700 rounded-xl p-2.5 text-xs text-white">
+              <option value="">-- Unassigned --</option>
+              ${teacherOptions}
+            </select>
+          </div>
+          <button type="submit" class="w-full py-2.5 bg-brand-600 hover:bg-brand-500 rounded-xl text-white font-semibold text-xs mt-3">Register Class</button>
+        </form>
+      `;
+      window.openModal(html);
+
+      document.getElementById('addClassForm').onsubmit = async (e) => {
+        e.preventDefault();
+        const cid = document.getElementById('mClsId').value.trim();
+        const data = {
+          classId: cid,
+          className: document.getElementById('mClsName').value.trim(),
+          department: document.getElementById('mClsDept').value.trim(),
+          assignedTeacherId: document.getElementById('mClsTeacher').value,
+          createdAt: serverTimestamp()
+        };
+        try {
+          await setDoc(doc(db, "classes", cid), data);
+          window.closeModal();
+          await loadInstitutionalData();
+          renderAdminClasses();
+          window.showToast("Class Registered", cid, "success");
+        } catch (err) {
+          window.showToast("Error", err.message, "error");
+        }
+      };
+    };
+
+    window.openAddStudentModal = function() {
+      const classes = window.appState.classes;
+      if (classes.length === 0) {
+        window.showToast("Notice", "Create at least one class before adding students.", "warning");
+        return;
+      }
+      const classOptions = classes.map(c => `<option value="${c.classId}">${c.className} (${c.classId})</option>`).join('');
+
+      const html = `
+        <h3 class="text-sm font-bold text-white mb-3">Add Student</h3>
+        <form id="addStudentForm" class="space-y-3">
+          <div>
+            <label class="text-[11px] text-slate-400 block mb-1">Student ID *</label>
+            <input type="text" id="mStudId" required placeholder="STU-2026-001" class="w-full border border-slate-700 rounded-xl p-2.5 text-xs text-white" />
+          </div>
+          <div>
+            <label class="text-[11px] text-slate-400 block mb-1">Full Name *</label>
+            <input type="text" id="mStudName" required placeholder="Student Name" class="w-full border border-slate-700 rounded-xl p-2.5 text-xs text-white" />
+          </div>
+          <div>
+            <label class="text-[11px] text-slate-400 block mb-1">Assign Class *</label>
+            <select id="mStudClass" required class="w-full border border-slate-700 rounded-xl p-2.5 text-xs text-white">
+              ${classOptions}
+            </select>
+          </div>
+          <div>
+            <label class="text-[11px] text-slate-400 block mb-1">Roll Number</label>
+            <input type="text" id="mStudRoll" placeholder="01" class="w-full border border-slate-700 rounded-xl p-2.5 text-xs text-white" />
+          </div>
+          <button type="submit" class="w-full py-2.5 bg-brand-600 hover:bg-brand-500 rounded-xl text-white font-semibold text-xs mt-3">Commit Student Record</button>
+        </form>
+      `;
+      window.openModal(html);
+
+      document.getElementById('addStudentForm').onsubmit = async (e) => {
+        e.preventDefault();
+        const sid = document.getElementById('mStudId').value.trim();
+
+        // Check ID uniqueness
+        if (window.appState.students.some(s => s.studentId === sid)) {
+          window.showToast("Duplicate Error", `Student ID ${sid} already exists.`, "error");
+          return;
+        }
+
+        const data = {
+          studentId: sid,
+          fullName: document.getElementById('mStudName').value.trim(),
+          classId: document.getElementById('mStudClass').value,
+          rollNo: document.getElementById('mStudRoll').value.trim(),
+          status: 'Active',
+          faceRegistered: false,
+          createdAt: serverTimestamp()
+        };
+        try {
+          await setDoc(doc(db, "students", sid), data);
+          window.closeModal();
+          await loadInstitutionalData();
+          renderStudentsTable();
+          populateFaceRegistrationDropdown();
+          window.showToast("Enrolled", `Student ${sid} saved`, "success");
+        } catch (err) {
+          window.showToast("Error", err.message, "error");
+        }
+      };
+    };
+
+    window.openAddTeacherModal = function() {
+      const html = `
+        <h3 class="text-sm font-bold text-white mb-3">Add Faculty Profile</h3>
+        <form id="addTeacherForm" class="space-y-3">
+          <div>
+            <label class="text-[11px] text-slate-400 block mb-1">Faculty / Teacher ID *</label>
+            <input type="text" id="mTchId" required placeholder="FAC-101" class="w-full border border-slate-700 rounded-xl p-2.5 text-xs text-white" />
+          </div>
+          <div>
+            <label class="text-[11px] text-slate-400 block mb-1">Full Name *</label>
+            <input type="text" id="mTchName" required placeholder="Professor Name" class="w-full border border-slate-700 rounded-xl p-2.5 text-xs text-white" />
+          </div>
+          <div>
+            <label class="text-[11px] text-slate-400 block mb-1">Institutional Email *</label>
+            <input type="email" id="mTchEmail" required placeholder="faculty@college.edu" class="w-full border border-slate-700 rounded-xl p-2.5 text-xs text-white" />
+          </div>
+          <button type="submit" class="w-full py-2.5 bg-brand-600 hover:bg-brand-500 rounded-xl text-white font-semibold text-xs mt-3">Register Faculty</button>
+        </form>
+      `;
+      window.openModal(html);
+
+      document.getElementById('addTeacherForm').onsubmit = async (e) => {
+        e.preventDefault();
+        const tid = document.getElementById('mTchId').value.trim();
+        const data = {
+          teacherId: tid,
+          fullName: document.getElementById('mTchName').value.trim(),
+          email: document.getElementById('mTchEmail').value.trim(),
+          status: 'Active',
+          faceRegistered: false,
+          createdAt: serverTimestamp()
+        };
+        try {
+          await setDoc(doc(db, "teachers", tid), data);
+          window.closeModal();
+          await loadInstitutionalData();
+          renderTeachersTable();
+          populateFaceRegistrationDropdown();
+          window.showToast("Saved", `Teacher ${tid} enrolled`, "success");
+        } catch (err) {
+          window.showToast("Error", err.message, "error");
+        }
+      };
+    };
+
+    // Reports View (Principal & Admin)
+    function renderPrincipalReportsView() {
+      const filterSelect = document.getElementById('reportClassFilter');
+      filterSelect.innerHTML = `<option value="">All Classes</option>` +
+        window.appState.classes.map(c => `<option value="${c.classId}">${c.className}</option>`).join('');
+
+      window.applyReportFilters();
+    }
+
+    function renderAdminReports() {
+      const container = document.getElementById('adminReportContainer');
+      const sessions = window.appState.attendanceSessions;
+
+      if (sessions.length === 0) {
+        container.innerHTML = `<div class="p-6 text-center text-slate-500 glass-panel rounded-2xl">No attendance logs available.</div>`;
+        return;
+      }
+
+      container.innerHTML = `
+        <div class="glass-panel rounded-xl border border-slate-800 overflow-x-auto">
+          <table class="w-full text-left text-xs">
+            <thead class="bg-slate-900 text-slate-400 uppercase tracking-wider border-b border-slate-800">
+              <tr>
+                <th class="p-2.5">Date & Time</th>
+                <th class="p-2.5">Class</th>
+                <th class="p-2.5">Teacher</th>
+                <th class="p-2.5">Turnout</th>
+                <th class="p-2.5 text-right">Details</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800 text-slate-300">
+              ${sessions.map(s => `
+                <tr class="hover:bg-slate-900/40">
+                  <td class="p-2.5 font-semibold text-white">${s.date}${s.startTime}</td>
+                  <td class="p-2.5">${s.className}</td>
+                  <td class="p-2.5 text-slate-400">${s.teacherName}</td>
+                  <td class="p-2.5 text-emerald-400 font-bold">${s.presentCount} / ${s.totalStudents} (${s.attendancePercentage}%)</td>
+                  <td class="p-2.5 text-right">
+                    <button onclick="window.viewSessionRosterModal('${s.sessionId}')" class="text-brand-300 hover:text-white underline">View List</button>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    window.applyReportFilters = function() {
+      const classId = document.getElementById('reportClassFilter')?.value;
+      const date = document.getElementById('reportDateFilter')?.value;
+      const tbody = document.getElementById('principalSessionTableBody');
+
+      let filtered = window.appState.attendanceSessions;
+      if (classId) filtered = filtered.filter(s => s.classId === classId);
+      if (date) filtered = filtered.filter(s => s.date === date);
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-slate-500">No matching attendance logs found.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = filtered.map(s => `
+        <tr class="hover:bg-slate-900/40">
+          <td class="p-2.5 font-semibold text-white">${s.date} (${s.startTime})</td>
+          <td class="p-2.5">${s.className}</td>
+          <td class="p-2.5 text-slate-400">${s.teacherName}</td>
+          <td class="p-2.5 font-bold text-emerald-400">${s.presentCount} / ${s.totalStudents} (${s.attendancePercentage}%)</td>
+          <td class="p-2.5 text-right">
+            <button onclick="window.viewSessionRosterModal('${s.sessionId}')" class="text-brand-300 hover:text-white underline">Roster Details</button>
+          </td>
+        </tr>
+      `).join('');
+    };
+
+    window.viewSessionRosterModal = function(sessionId) {
+      const session = window.appState.attendanceSessions.find(s => s.sessionId === sessionId);
+      if (!session) return;
+
+      const html = `
+        <h3 class="text-sm font-bold text-white mb-1">${session.className}</h3>
+        <p class="text-xs text-slate-400 mb-3">Teacher: ${session.teacherName} | Date: ${session.date} (${session.startTime} - ${session.endTime})</p>
+        <div class="glass-panel rounded-xl border border-slate-800 max-h-60 overflow-y-auto custom-scrollbar">
+          <table class="w-full text-left text-xs">
+            <thead class="bg-slate-900 text-slate-400 uppercase tracking-wider border-b border-slate-800">
+              <tr>
+                <th class="p-2">Roll</th>
+                <th class="p-2">Name</th>
+                <th class="p-2">Status</th>
+                <th class="p-2 text-right">Time</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800 text-slate-300">
+              ${session.records.map(r => `
+                <tr>
+                  <td class="p-2 font-mono">${r.rollNo || '-'}</td>
+                  <td class="p-2">${r.studentName}</td>
+                  <td class="p-2">
+                    <span class="px-1.5 py-0.5 rounded text-[10px] font-bold ${r.status === 'Present' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}">
+                      ${r.status}
+                    </span>
+                  </td>
+                  <td class="p-2 text-right font-mono text-slate-400">${r.time}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+      window.openModal(html);
+    };
+
+    window.exportAttendanceToCSV = function() {
+      const sessions = window.appState.attendanceSessions;
+      if (sessions.length === 0) {
+        window.showToast("No Data", "No session records to export.", "warning");
+        return;
+      }
+
+      let csvContent = "data:text/csv;charset=utf-8,SessionID,Date,ClassID,ClassName,Teacher,StudentID,StudentName,RollNo,Status,Time\n";
+      sessions.forEach(sess => {
+        sess.records.forEach(r => {
+          csvContent += `"${sess.sessionId}","${sess.date}","${sess.classId}","${sess.className}","${sess.teacherName}","${r.studentId}","${r.studentName}","${r.rollNo}","${r.status}","${r.time}"\n`;
+        });
+      });
+
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", `Attendance_Ledger_${new Date().toISOString().split('T')[0]}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    };
+  </script>
+</body>
+</html>
